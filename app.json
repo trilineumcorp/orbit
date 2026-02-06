@@ -1,0 +1,61 @@
+{
+  "expo": {
+    "name": "VISHWAS EDU TECH",
+    "slug": "VISHWAS",
+    "version": "1.0.0",
+    "orientation": "portrait",
+
+    "icon": "./assets/images/viswasnav.png",
+
+    "scheme": "vishwas",
+    "userInterfaceStyle": "automatic",
+    "associatedDomains": [],
+
+    "ios": {
+      "supportsTablet": true,
+      "bundleIdentifier": "com.trilineum.vishwas",
+      "splash": {
+        "image": "./assets/images/logo.jpg",
+        "resizeMode": "contain",
+        "backgroundColor": "#ffffff"
+      }
+    },
+
+    "android": {
+      "package": "com.trilineum.vishwas",
+      "adaptiveIcon": {
+        "foregroundImage": "./assets/images/viswasnav.png",
+        "backgroundColor": "#FF6B35"
+      },
+      "splash": {
+        "image": "./assets/images/logo.jpg",
+        "resizeMode": "contain",
+        "backgroundColor": "#ffffff"
+      }
+    },
+
+    "plugins": [
+      [
+        "expo-splash-screen",
+        {
+          "image": "./assets/images/logo.jpg",
+          "resizeMode": "contain",
+          "backgroundColor": "#ffffff"
+        }
+      ],
+      [
+        "expo-image-picker",
+        {
+          "photosPermission": "The app accesses your photos to let you select OMR sheet images.",
+          "cameraPermission": "The app accesses your camera to let you take photos of OMR sheets."
+        }
+      ],
+      [
+        "expo-camera",
+        {
+          "cameraPermission": "Allow $(PRODUCT_NAME) to access your camera to scan OMR sheets."
+        }
+      ]
+    ]
+  }
+}
