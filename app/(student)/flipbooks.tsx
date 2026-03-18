@@ -13,6 +13,8 @@ import { FlipBookSkeleton } from '@/components/skeleton';
 import { detectNetworkSpeed, getMinLoadingTime } from '@/utils/network';
 import { useAuth } from '@/contexts/AuthContext';
 
+const SUBJECTS = ['Mathematics', 'Physics', 'Chemistry', 'Biology'];
+
 export default function FlipBooksScreen() {
   const colorScheme = useColorScheme();
   const router = useRouter();
@@ -21,6 +23,7 @@ export default function FlipBooksScreen() {
   const [flipbooks, setFlipbooks] = useState<FlipBook[]>([]);
   const [searchQuery, setSearchQuery] = useState('');
   const [loading, setLoading] = useState(true);
+  const [selectedSubject, setSelectedSubject] = useState<string | null>(null);
   
   const fromExplore = params.from === 'explore';
 
@@ -62,9 +65,20 @@ export default function FlipBooksScreen() {
     }
   };
 
-  const filteredFlipBooks = flipbooks.filter(flipbook =>
-    flipbook.title.toLowerCase().includes(searchQuery.toLowerCase())
-  );
+  const filteredFlipBooks = flipbooks.filter(flipbook => {
+    const matchesSearch = flipbook.title.toLowerCase().includes(searchQuery.toLowerCase());
+    const matchesSubject = !selectedSubject || flipbook.subject === selectedSubject;
+    return matchesSearch && matchesSubject;
+  });
+
+  // Group flipbooks by subject
+  const flipbooksBySubject = SUBJECTS.reduce((acc, subject) => {
+    const subjectFlipbooks = flipbooks.filter(f => f.subject === subject);
+    if (subjectFlipbooks.length > 0) {
+      acc[subject] = subjectFlipbooks;
+    }
+    return acc;
+  }, {} as Record<string, FlipBook[]>);
 
   const colors = Colors[colorScheme ?? 'light'];
 
@@ -112,73 +126,128 @@ export default function FlipBooksScreen() {
             onChangeText={setSearchQuery}
           />
         </View>
+
+        {selectedSubject && (
+          <TouchableOpacity
+            style={[styles.backButton, { backgroundColor: colors.card }]}
+            onPress={() => setSelectedSubject(null)}
+            activeOpacity={0.7}>
+            <IconSymbol name="chevron.left" size={20} color={colors.icon} />
+            <ThemedText style={styles.backButtonText}>Back to Subjects</ThemedText>
+          </TouchableOpacity>
+        )}
+
         {loading ? (
           <View style={styles.skeletonContainer}>
             <FlipBookSkeleton count={6} />
           </View>
-        ) : filteredFlipBooks.length === 0 ? (
-          <ThemedView style={styles.emptyContainer}>
-            <View style={[styles.emptyIconContainer, { backgroundColor: ThemeColors.deepBlue + '20' }]}>
-              <IconSymbol name="book.closed.fill" size={64} color={ThemeColors.deepBlue} />
+        ) : selectedSubject ? (
+          // Show flipbooks for selected subject
+          filteredFlipBooks.length === 0 ? (
+            <ThemedView style={styles.emptyContainer}>
+              <View style={[styles.emptyIconContainer, { backgroundColor: ThemeColors.deepBlue + '20' }]}>
+                <IconSymbol name="book.closed.fill" size={64} color={ThemeColors.deepBlue} />
+              </View>
+              <ThemedText style={styles.emptyText}>No flip books available for {selectedSubject}</ThemedText>
+              <ThemedText style={styles.emptySubtext}>Flipbooks will appear here when added by admin</ThemedText>
+            </ThemedView>
+          ) : (
+            <View style={styles.flipbookGrid}>
+              {filteredFlipBooks.map(flipbook => (
+                <Link
+                  key={flipbook._id || flipbook.id}
+                  href={{
+                    pathname: '/flipbook-viewer',
+                    params: { 
+                      flipbookId: flipbook._id || flipbook.id || '', 
+                      title: flipbook.title, 
+                      url: flipbook.pdfUrl,
+                      ...(fromExplore && { from: 'explore' }),
+                    },
+                  }}
+                  asChild>
+                  <TouchableOpacity
+                    style={[styles.flipbookCard, { backgroundColor: colors.card }]}
+                    activeOpacity={0.85}>
+                    <View style={styles.thumbnailContainer}>
+                      <LinearGradient
+                        colors={[ThemeColors.deepBlue + '20', ThemeColors.orange + '15']}
+                        start={{ x: 0, y: 0 }}
+                        end={{ x: 1, y: 1 }}
+                        style={styles.pdfGradient}>
+                        <View style={styles.pdfIconWrapper}>
+                          <IconSymbol name="doc.text.fill" size={56} color={ThemeColors.deepBlue} />
+                        </View>
+                        <View style={styles.pdfLines}>
+                          <View style={[styles.pdfLine, { width: '80%' }]} />
+                          <View style={[styles.pdfLine, { width: '70%' }]} />
+                          <View style={[styles.pdfLine, { width: '85%' }]} />
+                          <View style={[styles.pdfLine, { width: '60%' }]} />
+                        </View>
+                      </LinearGradient>
+                      <View style={styles.pdfOverlay}>
+                        <View style={styles.pdfBadge}>
+                          <IconSymbol name="doc.text.fill" size={10} color={ThemeColors.white} />
+                          <ThemedText style={styles.pdfBadgeText}>PDF</ThemedText>
+                        </View>
+                      </View>
+                    </View>
+                    <View style={styles.flipbookInfo}>
+                      <ThemedText type="defaultSemiBold" numberOfLines={2} style={styles.flipbookTitle}>
+                        {flipbook.title}
+                      </ThemedText>
+                      {flipbook.uploadDate && (
+                        <ThemedText style={styles.uploadDate} numberOfLines={1}>
+                          {new Date(flipbook.uploadDate).toLocaleDateString()}
+                        </ThemedText>
+                      )}
+                    </View>
+                  </TouchableOpacity>
+                </Link>
+              ))}
             </View>
-            <ThemedText style={styles.emptyText}>No flip books available</ThemedText>
-            <ThemedText style={styles.emptySubtext}>Flipbooks will appear here when added by admin</ThemedText>
-          </ThemedView>
+          )
         ) : (
-          <View style={styles.flipbookGrid}>
-            {filteredFlipBooks.map(flipbook => (
-              <Link
-                key={flipbook._id || flipbook.id}
-                href={{
-                  pathname: '/flipbook-viewer',
-                  params: { 
-                    flipbookId: flipbook._id || flipbook.id || '', 
-                    title: flipbook.title, 
-                    url: flipbook.pdfUrl,
-                    ...(fromExplore && { from: 'explore' }),
-                  },
-                }}
-                asChild>
-                <TouchableOpacity
-                  style={[styles.flipbookCard, { backgroundColor: colors.card }]}
-                  activeOpacity={0.85}>
-                  <View style={styles.thumbnailContainer}>
+          // Show subject folders
+          Object.keys(flipbooksBySubject).length === 0 ? (
+            <ThemedView style={styles.emptyContainer}>
+              <View style={[styles.emptyIconContainer, { backgroundColor: ThemeColors.deepBlue + '20' }]}>
+                <IconSymbol name="book.closed.fill" size={64} color={ThemeColors.deepBlue} />
+              </View>
+              <ThemedText style={styles.emptyText}>No flip books available</ThemedText>
+              <ThemedText style={styles.emptySubtext}>Flipbooks will appear here when added by admin</ThemedText>
+            </ThemedView>
+          ) : (
+            <View style={styles.subjectGrid}>
+              {SUBJECTS.map(subject => {
+                const subjectFlipbooks = flipbooksBySubject[subject] || [];
+                if (subjectFlipbooks.length === 0) return null;
+                return (
+                  <TouchableOpacity
+                    key={subject}
+                    style={[styles.subjectCard, { backgroundColor: colors.card }]}
+                    onPress={() => setSelectedSubject(subject)}
+                    activeOpacity={0.85}>
                     <LinearGradient
                       colors={[ThemeColors.deepBlue + '20', ThemeColors.orange + '15']}
                       start={{ x: 0, y: 0 }}
                       end={{ x: 1, y: 1 }}
-                      style={styles.pdfGradient}>
-                      <View style={styles.pdfIconWrapper}>
-                        <IconSymbol name="doc.text.fill" size={56} color={ThemeColors.deepBlue} />
+                      style={styles.subjectGradient}>
+                      <View style={[styles.subjectIconContainer, { backgroundColor: ThemeColors.deepBlue + '30' }]}>
+                        <IconSymbol name="folder.fill" size={40} color={ThemeColors.deepBlue} />
                       </View>
-                      <View style={styles.pdfLines}>
-                        <View style={[styles.pdfLine, { width: '80%' }]} />
-                        <View style={[styles.pdfLine, { width: '70%' }]} />
-                        <View style={[styles.pdfLine, { width: '85%' }]} />
-                        <View style={[styles.pdfLine, { width: '60%' }]} />
-                      </View>
-                    </LinearGradient>
-                    <View style={styles.pdfOverlay}>
-                      <View style={styles.pdfBadge}>
-                        <IconSymbol name="doc.text.fill" size={10} color={ThemeColors.white} />
-                        <ThemedText style={styles.pdfBadgeText}>PDF</ThemedText>
-                      </View>
-                    </View>
-                  </View>
-                  <View style={styles.flipbookInfo}>
-                    <ThemedText type="defaultSemiBold" numberOfLines={2} style={styles.flipbookTitle}>
-                      {flipbook.title}
-                    </ThemedText>
-                    {flipbook.uploadDate && (
-                      <ThemedText style={styles.uploadDate} numberOfLines={1}>
-                        {new Date(flipbook.uploadDate).toLocaleDateString()}
+                      <ThemedText type="defaultSemiBold" style={styles.subjectTitle}>
+                        {subject}
                       </ThemedText>
-                    )}
-                  </View>
-                </TouchableOpacity>
-              </Link>
-            ))}
-          </View>
+                      <ThemedText style={styles.subjectCount}>
+                        {subjectFlipbooks.length} {subjectFlipbooks.length === 1 ? 'Flipbook' : 'Flipbooks'}
+                      </ThemedText>
+                    </LinearGradient>
+                  </TouchableOpacity>
+                );
+              })}
+            </View>
+          )
         )}
       </ScrollView>
     </ThemedView>
@@ -316,6 +385,7 @@ const styles = StyleSheet.create({
     flexWrap: 'wrap',
     gap: 16,
     marginTop: 4,
+    justifyContent: 'space-between',
   },
   flipbookCard: {
     width: '47%',
@@ -425,6 +495,77 @@ const styles = StyleSheet.create({
   },
   skeletonContainer: {
     paddingTop: 4,
+  },
+  backButton: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    padding: 14,
+    borderRadius: 16,
+    marginBottom: 16,
+    gap: 8,
+    ...Platform.select({
+      ios: {
+        shadowColor: '#000',
+        shadowOffset: { width: 0, height: 2 },
+        shadowOpacity: 0.08,
+        shadowRadius: 8,
+      },
+      android: {
+        elevation: 3,
+      },
+    }),
+  },
+  backButtonText: {
+    fontSize: 16,
+    fontWeight: '600',
+  },
+  subjectGrid: {
+    flexDirection: 'row',
+    flexWrap: 'wrap',
+    gap: 16,
+    marginTop: 4,
+    justifyContent: 'space-between',
+  },
+  subjectCard: {
+    width: '47%',
+    borderRadius: 20,
+    overflow: 'hidden',
+    ...Platform.select({
+      ios: {
+        shadowColor: '#000',
+        shadowOffset: { width: 0, height: 6 },
+        shadowOpacity: 0.12,
+        shadowRadius: 16,
+      },
+      android: {
+        elevation: 6,
+      },
+    }),
+  },
+  subjectGradient: {
+    padding: 20,
+    alignItems: 'center',
+    minHeight: 140,
+    justifyContent: 'center',
+  },
+  subjectIconContainer: {
+    width: 64,
+    height: 64,
+    borderRadius: 16,
+    justifyContent: 'center',
+    alignItems: 'center',
+    marginBottom: 12,
+  },
+  subjectTitle: {
+    fontSize: 16,
+    fontWeight: '800',
+    marginBottom: 6,
+    textAlign: 'center',
+  },
+  subjectCount: {
+    fontSize: 13,
+    opacity: 0.7,
+    fontWeight: '600',
   },
 });
 

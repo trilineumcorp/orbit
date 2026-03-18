@@ -167,16 +167,65 @@ export const updateUser = async (userData: Partial<User>): Promise<User> => {
     );
 
     if (response.success && response.data) {
-      const updatedUser = response.data;
+      const updatedUser = (response.data as any).data || response.data;
       // Update local storage with the updated user data
       await AsyncStorage.setItem(STORAGE_KEYS.USER_DATA, JSON.stringify(updatedUser));
       console.log('Profile updated successfully:', updatedUser);
-      return updatedUser;
+      return updatedUser as User;
     } else {
       throw new Error(response.message || 'Failed to update profile');
     }
   } catch (error: any) {
     console.error('Update user error:', error);
     throw new Error(error.message || 'Failed to update user');
+  }
+};
+
+// Get all users (admin only)
+export const getUsers = async (): Promise<User[]> => {
+  try {
+    console.log('getUsers: Starting API call to /auth/users');
+    const response = await apiService.get<User[]>('/auth/users', true);
+    console.log('getUsers: API response received:', {
+      success: response.success,
+      hasData: !!response.data,
+      dataLength: response.data?.length || 0,
+      message: response.message
+    });
+
+    if (response.success && response.data) {
+      console.log('getUsers: Returning', response.data.length, 'users');
+      return response.data;
+    } else {
+      const errorMsg = response.message || 'Failed to fetch users';
+      console.error('getUsers: API returned error:', errorMsg);
+      throw new Error(errorMsg);
+    }
+  } catch (error: any) {
+    console.error('Get users error:', error);
+    console.error('Error stack:', error.stack);
+    throw new Error(error.message || 'Failed to fetch users. Please check your connection.');
+  }
+};
+
+// Update student by admin (admin only)
+export const updateStudentByAdmin = async (studentId: string, updateData: {
+  name?: string;
+  email?: string;
+  rollNumber?: string;
+  class?: string;
+  phoneNumber?: string;
+}): Promise<User> => {
+  try {
+    const response = await apiService.put<User>(`/auth/users/${studentId}`, updateData, true);
+
+    if (response.success && response.data) {
+      return response.data;
+    } else {
+      throw new Error(response.message || 'Failed to update student');
+    }
+  } catch (error: any) {
+    console.error('Update student error:', error);
+    throw new Error(error.message || 'Failed to update student');
   }
 };

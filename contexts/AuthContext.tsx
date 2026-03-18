@@ -23,11 +23,28 @@ export const AuthProvider: React.FC<{ children: ReactNode }> = ({ children }) =>
 
   useEffect(() => {
     checkAuth();
+    
+    // Safety timeout - always stop loading after 3 seconds
+    const safetyTimeout = setTimeout(() => {
+      console.warn('AuthContext: Safety timeout - stopping loading state');
+      setIsLoading(false);
+    }, 3000);
+
+    return () => clearTimeout(safetyTimeout);
   }, []);
 
   const checkAuth = async () => {
     try {
-      const currentUser = await authService.getCurrentUser();
+      // Add timeout to prevent hanging - reduced to 2 seconds
+      const authPromise = authService.getCurrentUser();
+      const timeoutPromise = new Promise<User | null>((resolve) => 
+        setTimeout(() => {
+          console.warn('AuthContext: Auth check timeout - continuing without user');
+          resolve(null);
+        }, 2000)
+      );
+      
+      const currentUser = await Promise.race([authPromise, timeoutPromise]);
       setUser(currentUser);
     } catch (error) {
       console.error('Auth check error:', error);

@@ -67,7 +67,7 @@ export default function StudentNotificationsScreen() {
     },
     {
       id: '3',
-      title: 'Welcome to VISHWAS',
+      title: 'Welcome to topscore',
         message: 'Thank you for joining our platform. Start exploring!',
         time: '3 days ago',
         read: true,

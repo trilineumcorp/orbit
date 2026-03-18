@@ -51,6 +51,7 @@ class ApiService {
   private async getHeaders(includeAuth: boolean = true): Promise<HeadersInit> {
     const headers: HeadersInit = {
       'Content-Type': 'application/json',
+      'Accept': 'application/json',
     };
 
     if (includeAuth) {
@@ -67,10 +68,26 @@ class ApiService {
     let data;
     try {
       const text = await response.text();
-      data = text ? JSON.parse(text) : {};
-    } catch (error) {
+      
+      // Check if response is HTML (error page)
+      if (text.trim().startsWith('<!DOCTYPE') || text.trim().startsWith('<html')) {
+        console.error('Received HTML response instead of JSON.');
+        console.error('Response preview:', text.substring(0, 200));
+        throw new Error('Server returned HTML instead of JSON. Make sure the backend server is running on port 3000.');
+      }
+      
+      // Check if response is empty
+      if (!text || text.trim().length === 0) {
+        data = {};
+      } else {
+        data = JSON.parse(text);
+      }
+    } catch (error: any) {
       console.error('Failed to parse response:', error);
-      throw new Error('Invalid JSON response from server');
+      if (error.message && error.message.includes('HTML')) {
+        throw error; // Re-throw HTML detection error
+      }
+      throw new Error('Invalid JSON response from server. Make sure the backend server is running on port 3000.');
     }
 
     // For validation errors (400) or other error responses, return the response data instead of throwing
@@ -89,16 +106,24 @@ class ApiService {
 
   async get<T>(endpoint: string, requireAuth: boolean = true): Promise<ApiResponse<T>> {
     try {
-      const response = await fetch(`${this.baseURL}${endpoint}`, {
+      const url = `${this.baseURL}${endpoint}`;
+      console.log(`API GET: ${url}`);
+      
+      const response = await fetch(url, {
         method: 'GET',
         headers: await this.getHeaders(requireAuth),
       });
 
+      console.log(`API Response status: ${response.status}, Content-Type: ${response.headers.get('content-type')}`);
+      
       return await this.handleResponse<T>(response);
     } catch (error: any) {
       console.error(`GET ${endpoint} error:`, error);
       if (error.message?.includes('Network request failed') || error.message?.includes('fetch')) {
-        throw new Error('Network request failed. Please check if the server is running and accessible.');
+        throw new Error('Network request failed. Please check:\n1. Backend server is running on port 3000\n2. For Android emulator: using http://10.0.2.2:3000/api\n3. For iOS simulator: using http://localhost:3000/api\n4. For physical device: set EXPO_PUBLIC_API_URL with your computer IP address');
+      }
+      if (error.message?.includes('HTML')) {
+        throw new Error('Server returned HTML instead of JSON. Make sure the backend server is running on port 3000.');
       }
       throw new Error(error.message || 'Network error');
     }

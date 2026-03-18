@@ -113,22 +113,14 @@ export default function HomeScreen() {
     <ThemedView style={styles.container}>
       {/* Top Header with Logo and Profile Avatar */}
       <View style={styles.topHeader}>
-        {/* Logo and App Name Section */}
+        {/* Logo Section */}
         <View style={styles.logoSection}>
           <View style={styles.logoContainer}>
             <Image
-              source={require('@/assets/images/viswasnav.png')}
+              source={require('@/assets/images/logo.png')}
               style={styles.logoImage}
-              contentFit="cover"
+              contentFit="contain"
             />
-          </View>
-          <View style={styles.appNameContainer}>
-            <ThemedText style={[styles.appName, { color: ThemeColors.deepBlue }]}>
-              VISHWAS EDUTECH
-            </ThemedText>
-            <ThemedText style={[styles.appSubtitle, { color: ThemeColors.orange }]}>
-              IIT FOUNDATION | MEDICAL
-            </ThemedText>
           </View>
         </View>
 
@@ -276,8 +268,7 @@ const styles = StyleSheet.create({
   logoSection: {
     flexDirection: 'row',
     alignItems: 'center',
-    flex: 1,
-    gap: getResponsiveValue(10, 12, 16, 18),
+    justifyContent: 'flex-start',
   },
   profileAvatarContainer: {
     justifyContent: 'center',
@@ -287,6 +278,7 @@ const styles = StyleSheet.create({
   searchSectionWrapper: {
     paddingHorizontal: getResponsiveValue(16, 20, 24, 28),
     paddingBottom: getResponsiveValue(12, 16, 20, 24),
+    paddingTop: getResponsiveValue(12, 14, 16, 18),
     backgroundColor: ThemeColors.white,
     ...Platform.select({
       ios: {
@@ -301,12 +293,13 @@ const styles = StyleSheet.create({
     }),
   },
   logoContainer: {
-    width: getResponsiveValue(50, 60, 70, 80),
-    height: getResponsiveValue(50, 60, 70, 80),
-    borderRadius: getResponsiveValue(25, 30, 35, 40),
+    width: getResponsiveValue(120, 150, 180, 200),
+    height: getResponsiveValue(120, 80, 180, 200),
+    borderRadius: getResponsiveValue(30, 35, 40, 45),
     overflow: 'hidden',
-    backgroundColor: ThemeColors.orange + '20',
-    padding: getResponsiveValue(4, 6, 8, 10),
+    justifyContent: 'center',
+    alignItems: 'center',
+    marginTop: getResponsiveValue(8, 8, 12, 14),
   },
   logoImage: {
     width: '100%',

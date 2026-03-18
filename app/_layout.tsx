@@ -2,7 +2,7 @@ import { DarkTheme, DefaultTheme, ThemeProvider } from '@react-navigation/native
 import { Stack, useRouter, useSegments } from 'expo-router';
 import { StatusBar } from 'expo-status-bar';
 import * as SplashScreen from 'expo-splash-screen';
-import { useEffect, useState, useRef } from 'react';
+import { useEffect, useState } from 'react';
 import 'react-native-reanimated';
 
 import { ThemeColors } from '@/constants/theme';
@@ -10,17 +10,10 @@ import { useColorScheme } from '@/hooks/use-color-scheme';
 import { initializeMockData } from '@/services/mockData';
 import { AuthProvider, useAuth } from '@/contexts/AuthContext';
 import { CustomSplashScreen } from '@/components/splash-screen';
+import { ErrorBoundary } from '@/components/error-boundary';
 
-// Don't prevent auto-hide - we want to hide it immediately
-// Hide native splash screen as early as possible
-let splashHidden = false;
-SplashScreen.hideAsync()
-  .then(() => {
-    splashHidden = true;
-  })
-  .catch(() => {
-    splashHidden = true;
-  });
+// Prevent auto-hide so we can control when to hide it
+SplashScreen.preventAutoHideAsync().catch(() => {});
 
 const CustomLightTheme = {
   ...DefaultTheme,
@@ -48,82 +41,21 @@ const CustomDarkTheme = {
 
 function RootLayoutNav() {
   const colorScheme = useColorScheme();
-  const { isAuthenticated, isLoading, user } = useAuth();
-  const segments = useSegments();
-  const router = useRouter();
-  const navigationHandled = useRef(false);
-
-  useEffect(() => {
-    if (isLoading) {
-      navigationHandled.current = false;
-      return;
-    }
-
-    const inAuthGroup = segments[0] === 'auth';
-    const pathname = segments.join('/');
-
-    // Only handle navigation once per auth state change
-    if (navigationHandled.current) {
-      return;
-    }
-
-    // Don't redirect if we're already on the correct page
-    // Allow reset-password page to be accessed without authentication
-    if (pathname.includes('auth/reset-password')) {
-      return; // Allow reset password page without redirect
-    }
-    if (pathname.includes('auth/login') && !isAuthenticated) {
-      return; // Already on login page and not authenticated - correct state
-    }
-
-    // If authenticated and in auth group, redirect to home (but allow reset-password)
-    if (isAuthenticated && inAuthGroup && user && !pathname.includes('auth/reset-password')) {
-      navigationHandled.current = true;
-      console.log('Root layout: Redirecting authenticated user from auth to home, role:', user.role);
-      // Delay to ensure route groups are ready
-      setTimeout(() => {
-        // Navigate to root - route groups will handle showing the correct content
-        router.replace('/');
-      }, 500);
-      return;
-    }
-
-    // If not authenticated and not in auth group, redirect to login
-    if (!isAuthenticated && !inAuthGroup) {
-      // Only redirect if we're sure - don't redirect if user exists (might be updating)
-      if (!user) {
-        navigationHandled.current = true;
-        console.log('Root layout: Not authenticated and no user, redirecting to login');
-        router.replace('/auth/login');
-      }
-      return;
-    }
-
-    // If authenticated and not in auth group, ensure we're showing the right route group
-    if (isAuthenticated && !inAuthGroup && user) {
-      console.log('Root layout: User authenticated, not in auth group, role:', user.role, 'pathname:', pathname);
-      // The route groups should handle showing the correct content
-      // If pathname is empty, we're at root - the route groups will match
-      // Don't redirect - let the route groups handle showing the correct content
-    }
-
-    // Reset flag after a delay to allow for future navigation
-    const timer = setTimeout(() => {
-      navigationHandled.current = false;
-    }, 2000);
-
-    return () => clearTimeout(timer);
-  }, [isAuthenticated, isLoading, segments, router, user]);
+  
+  // Simplified - let index.tsx handle navigation
+  // This component just provides the navigation structure
 
   return (
     <ThemeProvider value={colorScheme === 'dark' ? CustomDarkTheme : CustomLightTheme}>
-      <Stack screenOptions={{ headerShown: false }}>
-        <Stack.Screen name="index" />
-        <Stack.Screen name="(admin)" />
-        <Stack.Screen name="(student)" />
-        <Stack.Screen name="auth" />
-        <Stack.Screen name="modal" options={{ presentation: 'modal', title: 'Modal' }} />
-      </Stack>
+      <ErrorBoundary>
+        <Stack screenOptions={{ headerShown: false }}>
+          <Stack.Screen name="index" />
+          <Stack.Screen name="(admin)" />
+          <Stack.Screen name="(student)" />
+          <Stack.Screen name="auth" />
+          <Stack.Screen name="modal" options={{ presentation: 'modal', title: 'Modal' }} />
+        </Stack>
+      </ErrorBoundary>
       <StatusBar style={colorScheme === 'dark' ? 'light' : 'dark'} />
     </ThemeProvider>
   );
@@ -131,46 +63,79 @@ function RootLayoutNav() {
 
 export default function RootLayout() {
   const [appIsReady, setAppIsReady] = useState(false);
+  const [initError, setInitError] = useState<Error | null>(null);
 
   useEffect(() => {
+    // Hide native splash screen immediately to show custom splash
+    SplashScreen.hideAsync().catch(() => {});
+    
+    // Safety timeout - always show app after 3 seconds max
+    const safetyTimeout = setTimeout(() => {
+      console.log('RootLayout: Safety timeout - forcing app ready');
+      setAppIsReady(true);
+    }, 3000);
+
     async function prepare() {
       try {
-        // Initialize mock data with timeout to prevent hanging
-        const initPromise = initializeMockData();
-        const timeoutPromise = new Promise((_, reject) => 
-          setTimeout(() => reject(new Error('Initialization timeout')), 5000)
-        );
-        
-        await Promise.race([initPromise, timeoutPromise]).catch((e) => {
+        // Start mock data initialization in background (non-blocking)
+        initializeMockData().catch((e) => {
           console.warn('Mock data initialization warning:', e);
-          // Continue even if mock data fails
         });
         
-        // Add any other async initialization here (fonts, etc.)
-        // await Font.loadAsync(...);
-        
-        // Add a small delay to ensure splash screen is visible
-        await new Promise(resolve => setTimeout(resolve, 500));
+        // Show splash screen for at least 2.5 seconds so users can see it
+        await new Promise(resolve => setTimeout(resolve, 2500));
       } catch (e) {
-        console.warn('Error during app initialization:', e);
+        console.error('Error during app initialization:', e);
+        setInitError(e as Error);
         // Continue even if there's an error
       } finally {
+        // Clear safety timeout since we're ready
+        clearTimeout(safetyTimeout);
+        // Ensure native splash screen is hidden
+        SplashScreen.hideAsync().catch(() => {});
         // Set app as ready - always set to true even if initialization fails
+        console.log('RootLayout: App ready, showing main app');
         setAppIsReady(true);
       }
     }
 
     prepare();
+
+    return () => {
+      clearTimeout(safetyTimeout);
+    };
   }, []);
+
+  // Ensure splash screen is definitely hidden when app becomes ready
+  // This must be before any conditional returns to follow Rules of Hooks
+  useEffect(() => {
+    if (appIsReady) {
+      SplashScreen.hideAsync().catch(() => {});
+    }
+  }, [appIsReady]);
 
   // Show custom splash screen while app is loading
   if (!appIsReady) {
-    return <CustomSplashScreen />; // Show custom splash screen
+    return (
+      <ErrorBoundary>
+        <CustomSplashScreen />
+      </ErrorBoundary>
+    );
+  }
+
+  // If there was an initialization error, still show the app
+  // The error boundary will catch any runtime errors
+  if (initError) {
+    console.warn('App initialized with error, but continuing:', initError);
   }
 
   return (
-    <AuthProvider>
-      <RootLayoutNav />
-    </AuthProvider>
+    <ErrorBoundary>
+      <AuthProvider>
+        <ErrorBoundary>
+          <RootLayoutNav />
+        </ErrorBoundary>
+      </AuthProvider>
+    </ErrorBoundary>
   );
 }

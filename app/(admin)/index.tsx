@@ -121,30 +121,30 @@ export default function AdminDashboard() {
             <TouchableOpacity 
               style={styles.logoContainer}
               onPress={() => router.push('/(admin)/')}
-              activeOpacity={0.7}>
+              activeOpacity={1}>
               <View style={styles.logoWrapper}>
                 <Image
-                  source={require('@/assets/images/viswasnav.png')}
+                  source={require('@/assets/images/logowhite.png')}
                   style={styles.logoImage}
-                  contentFit="cover"
+                  contentFit="contain"
                 />
               </View>
             </TouchableOpacity>
           </View>
-          <TouchableOpacity
+          {/* <TouchableOpacity
             onPress={() => setDrawerVisible(true)}
             style={styles.notificationButton}
             activeOpacity={0.7}>
             <IconSymbol name="bell.fill" size={24} color={ThemeColors.lightNeutral} />
-          </TouchableOpacity>
+          </TouchableOpacity> */}
         </View>
         
         {/* Greeting Text in Header */}
-        <View style={styles.headerGreeting}>
+        {/* <View style={styles.headerGreeting}>
           <ThemedText style={[styles.greetingText, { color: ThemeColors.lightNeutral }]}>
             Transform your <ThemedText style={styles.greetingHighlight}>platform</ThemedText> with us
           </ThemedText>
-        </View>
+        </View> */}
 
         {/* Search Bar - Overlapping Header and Content */}
         <View style={styles.searchSectionOverlap}>
@@ -619,19 +619,19 @@ const styles = StyleSheet.create({
     justifyContent: 'center',
   },
   logoWrapper: {
-    width: getResponsiveValue(60, 70, 80, 90),
-    height: getResponsiveValue(60, 70, 80, 90),
+    width: getResponsiveValue(120, 150, 180, 200),
+    height: getResponsiveValue(120, 150, 180, 200),
     borderRadius: getResponsiveValue(16, 20, 24, 28),
     backgroundColor: 'transparent',
-    padding: getResponsiveValue(6, 8, 10, 12),
+    padding: 0,
     alignItems: 'center',
     justifyContent: 'center',
-    overflow: 'hidden',
+    overflow: 'visible',
   },
   logoImage: {
     width: '100%',
     height: '100%',
-    borderRadius: getResponsiveValue(10, 12, 14, 16),
+    borderRadius: 0,
   },
   contentOverlap: {
     flex: 1,

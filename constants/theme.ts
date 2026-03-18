@@ -1,14 +1,14 @@
 /**
- * VISHWAS Edu Tech App Theme - IIT Foundation & Medical
+ * topscore App Theme - IIT Foundation & Medical
  * Color Palette: Orange + Dark Blue (matching logo colors)
  */
 
 import { Platform } from 'react-native';
 
-// Theme Colors - Matching VISHWAS Logo
+// Theme Colors - Matching topscore Logo
 export const ThemeColors = {
   orange: '#FF6B35',        // Primary orange from logo circle
-  deepBlue: '#0B3C5D',      // Dark blue from "VISHWAS" text and book spine
+  deepBlue: '#0B3C5D',      // Dark blue from topscore logo
   lightNeutral: '#FAFAFA',
   grayText: '#424242',
   white: '#FFFFFF',

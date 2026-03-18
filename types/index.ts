@@ -88,6 +88,8 @@ export interface User {
   role: UserRole;
   createdAt: Date;
   avatarUrl?: string | null;
+  phoneNumber?: string;
+  profilePicture?: string;
   // Student specific fields
   rollNumber?: string;
   class?: string;

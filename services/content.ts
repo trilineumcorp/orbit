@@ -59,17 +59,29 @@ export interface ExamQuestion {
 
 // Video API
 export const getVideos = async (standard?: number, subject?: string): Promise<Video[]> => {
-  let url = '/videos';
-  const params: string[] = [];
-  if (standard) params.push(`standard=${standard}`);
-  if (subject) params.push(`subject=${encodeURIComponent(subject)}`);
-  if (params.length > 0) url += `?${params.join('&')}`;
-  
-  const response = await apiService.get<Video[]>(url, false);
-  if (response.success && response.data) {
-    return response.data;
+  try {
+    let url = '/videos';
+    const params: string[] = [];
+    if (standard) params.push(`standard=${standard}`);
+    if (subject) params.push(`subject=${encodeURIComponent(subject)}`);
+    if (params.length > 0) url += `?${params.join('&')}`;
+    
+    console.log('Fetching videos from:', url, { standard, subject });
+    const response = await apiService.get<Video[]>(url, false);
+    console.log('Videos response:', { success: response.success, dataLength: response.data?.length || 0 });
+    
+    if (response.success && response.data) {
+      // Map MongoDB _id to id for frontend compatibility
+      return response.data.map((video: any) => ({
+        ...video,
+        id: video._id || video.id,
+      }));
+    }
+    return [];
+  } catch (error: any) {
+    console.error('Error fetching videos:', error);
+    throw error;
   }
-  return [];
 };
 
 export const getVideoById = async (id: string): Promise<Video | null> => {
@@ -105,17 +117,29 @@ export const deleteVideo = async (id: string): Promise<void> => {
 
 // FlipBook API
 export const getFlipBooks = async (standard?: number, subject?: string): Promise<FlipBook[]> => {
-  let url = '/flipbooks';
-  const params: string[] = [];
-  if (standard) params.push(`standard=${standard}`);
-  if (subject) params.push(`subject=${encodeURIComponent(subject)}`);
-  if (params.length > 0) url += `?${params.join('&')}`;
-  
-  const response = await apiService.get<FlipBook[]>(url, false);
-  if (response.success && response.data) {
-    return response.data;
+  try {
+    let url = '/flipbooks';
+    const params: string[] = [];
+    if (standard) params.push(`standard=${standard}`);
+    if (subject) params.push(`subject=${encodeURIComponent(subject)}`);
+    if (params.length > 0) url += `?${params.join('&')}`;
+    
+    console.log('Fetching flipbooks from:', url, { standard, subject });
+    const response = await apiService.get<FlipBook[]>(url, false);
+    console.log('Flipbooks response:', { success: response.success, dataLength: response.data?.length || 0 });
+    
+    if (response.success && response.data) {
+      // Map MongoDB _id to id for frontend compatibility
+      return response.data.map((flipbook: any) => ({
+        ...flipbook,
+        id: flipbook._id || flipbook.id,
+      }));
+    }
+    return [];
+  } catch (error: any) {
+    console.error('Error fetching flipbooks:', error);
+    throw error;
   }
-  return [];
 };
 
 export const getFlipBookById = async (id: string): Promise<FlipBook | null> => {
@@ -151,18 +175,30 @@ export const deleteFlipBook = async (id: string): Promise<void> => {
 
 // Exam API
 export const getExams = async (standard?: number, subject?: string, examType?: string): Promise<Exam[]> => {
-  let url = '/exams';
-  const params: string[] = [];
-  if (standard) params.push(`standard=${standard}`);
-  if (subject) params.push(`subject=${encodeURIComponent(subject)}`);
-  if (examType) params.push(`examType=${encodeURIComponent(examType)}`);
-  if (params.length > 0) url += `?${params.join('&')}`;
-  
-  const response = await apiService.get<Exam[]>(url, false);
-  if (response.success && response.data) {
-    return response.data;
+  try {
+    let url = '/exams';
+    const params: string[] = [];
+    if (standard) params.push(`standard=${standard}`);
+    if (subject) params.push(`subject=${encodeURIComponent(subject)}`);
+    if (examType) params.push(`examType=${encodeURIComponent(examType)}`);
+    if (params.length > 0) url += `?${params.join('&')}`;
+    
+    console.log('Fetching exams from:', url, { standard, subject, examType });
+    const response = await apiService.get<Exam[]>(url, false);
+    console.log('Exams response:', { success: response.success, dataLength: response.data?.length || 0 });
+    
+    if (response.success && response.data) {
+      // Map MongoDB _id to id for frontend compatibility
+      return response.data.map((exam: any) => ({
+        ...exam,
+        id: exam._id || exam.id,
+      }));
+    }
+    return [];
+  } catch (error: any) {
+    console.error('Error fetching exams:', error);
+    throw error;
   }
-  return [];
 };
 
 export const getExamById = async (id: string): Promise<Exam | null> => {

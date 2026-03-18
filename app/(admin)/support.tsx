@@ -46,7 +46,7 @@ export default function AdminSupportScreen() {
       description: 'Send us an email and we\'ll get back to you',
       icon: 'envelope.fill',
       action: () => {
-        Linking.openURL('mailto:support@vishwas.com?subject=Support Request');
+        Linking.openURL('mailto:support@topscore.com?subject=Support Request');
       },
     },
     {

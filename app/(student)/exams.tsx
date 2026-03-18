@@ -13,6 +13,8 @@ import { ExamSkeleton } from '@/components/skeleton';
 import { detectNetworkSpeed, getMinLoadingTime } from '@/utils/network';
 import { useAuth } from '@/contexts/AuthContext';
 
+const SUBJECTS = ['Mathematics', 'Physics', 'Chemistry', 'Biology'];
+
 export default function ExamsScreen() {
   const colorScheme = useColorScheme();
   const router = useRouter();
@@ -21,7 +23,9 @@ export default function ExamsScreen() {
   const [exams, setExams] = useState<Exam[]>([]);
   const [searchQuery, setSearchQuery] = useState('');
   const [loading, setLoading] = useState(true);
-  
+  const [selectedSubject, setSelectedSubject] = useState<string | null>(null);
+  const [activeFilter, setActiveFilter] = useState('Popular');
+
   const fromExplore = params.from === 'explore';
 
   // Get user's standard from class field
@@ -35,24 +39,24 @@ export default function ExamsScreen() {
     try {
       setLoading(true);
       let minLoadingTime = 300; // Default minimum loading time
-      
+
       try {
         const networkSpeed = await detectNetworkSpeed();
         minLoadingTime = getMinLoadingTime(networkSpeed);
       } catch (networkError) {
         console.warn('Network speed detection failed, using default:', networkError);
       }
-      
+
       const startTime = Date.now();
       // Filter exams by user's standard if available
       const loadedExams = await getExams(userStandard);
       const elapsedTime = Date.now() - startTime;
-      
+
       // Ensure minimum loading time for better UX
       if (elapsedTime < minLoadingTime) {
         await new Promise(resolve => setTimeout(resolve, minLoadingTime - elapsedTime));
       }
-      
+
       setExams(loadedExams);
     } catch (error: any) {
       console.error('Failed to load exams:', error);
@@ -62,11 +66,63 @@ export default function ExamsScreen() {
     }
   };
 
-  const filteredExams = exams.filter(exam =>
-    exam.title.toLowerCase().includes(searchQuery.toLowerCase())
-  );
+  const filteredExams = exams.filter(exam => {
+    const matchesSearch = exam.title.toLowerCase().includes(searchQuery.toLowerCase());
+    const matchesSubject = !selectedSubject || exam.subject === selectedSubject;
+    return matchesSearch && matchesSubject;
+  });
+
+  // Group exams by subject
+  const examsBySubject = SUBJECTS.reduce((acc, subject) => {
+    const subjectExams = exams.filter(e => e.subject === subject);
+    if (subjectExams.length > 0) {
+      acc[subject] = subjectExams;
+    }
+    return acc;
+  }, {} as Record<string, Exam[]>);
 
   const colors = Colors[colorScheme ?? 'light'];
+
+  // Get subject icon and color
+  const getSubjectDetails = (subject: string) => {
+    switch (subject) {
+      case 'Mathematics':
+        return {
+          icon: 'function',
+          color: '#4158D0',
+          gradient: ['#4158D0', '#C850C0'] as [string, string],
+          accent: '#C850C0'
+        };
+      case 'Physics':
+        return {
+          icon: 'atom',
+          color: '#00C9A7',
+          gradient: ['#00C9A7', '#12B2E2'] as [string, string],
+          accent: '#12B2E2'
+        };
+      case 'Chemistry':
+        return {
+          icon: 'flask',
+          color: '#FF512F',
+          gradient: ['#FF512F', '#F09819'] as [string, string],
+          accent: '#F09819'
+        };
+      case 'Biology':
+        return {
+          icon: 'leaf',
+          color: '#11998E',
+          gradient: ['#11998E', '#38EF7D'] as [string, string],
+          accent: '#38EF7D'
+        };
+      default:
+        return {
+          icon: 'book',
+          color: ThemeColors.orange,
+          gradient: [ThemeColors.orange, ThemeColors.deepBlue] as [string, string],
+          accent: ThemeColors.deepBlue
+        };
+    }
+  };
 
   return (
     <ThemedView style={styles.container}>
@@ -76,170 +132,414 @@ export default function ExamsScreen() {
         onBackPress={fromExplore ? () => router.push('/explore') : undefined}
       />
 
-      <ScrollView style={styles.examList} contentContainerStyle={styles.examListContent} showsVerticalScrollIndicator={false}>
-        
-        <ThemedView style={[styles.welcomeCard, { backgroundColor: colors.card }]}>
-          <LinearGradient
-            colors={[ThemeColors.orange + '25', ThemeColors.deepBlue + '20', ThemeColors.orange + '15']}
-            start={{ x: 0, y: 0 }}
-            end={{ x: 1, y: 1 }}
-            style={styles.welcomeGradient}>
-            <View style={styles.welcomeContent}>
-              <View style={styles.welcomeIconWrapper}>
-                <View style={[styles.welcomeIconContainer, { backgroundColor: ThemeColors.orange + '30' }]}>
-                  <LinearGradient
-                    colors={[ThemeColors.orange, '#FF8C5A', ThemeColors.orange]}
-                    start={{ x: 0, y: 0 }}
-                    end={{ x: 1, y: 1 }}
-                    style={styles.welcomeIconGradient}>
-                    <View style={styles.welcomeIconGlow} />
-                    <IconSymbol name="doc.text.fill" size={48} color={ThemeColors.white} />
-                  </LinearGradient>
-                </View>
-                <View style={styles.welcomeIconRing} />
+      <ScrollView
+        style={styles.examList}
+        contentContainerStyle={styles.examListContent}
+        showsVerticalScrollIndicator={false}
+      >
+
+        {/* Hero Banner */}
+        <LinearGradient
+          colors={['#667eea', '#764ba2', '#6B8DD6']}
+          start={{ x: 0, y: 0 }}
+          end={{ x: 1, y: 1 }}
+          style={styles.heroBanner}>
+          <View style={styles.heroContent}>
+            <View style={styles.heroBadge}>
+              <IconSymbol name="star.fill" size={12} color="#FFD700" />
+              <ThemedText style={styles.heroBadgeText}>IIT JEE | NEET</ThemedText>
+            </View>
+            <ThemedText style={styles.heroTitle}>
+              Practice with{'\n'}Premium Exams
+            </ThemedText>
+            <ThemedText style={styles.heroSubtitle}>
+              {userStandard ? `Class ${userStandard} • ` : ''}Chapter-wise tests with detailed analysis
+            </ThemedText>
+            <View style={styles.heroStats}>
+              <View style={styles.heroStat}>
+                <IconSymbol name="checkmark.circle.fill" size={16} color="#FFD700" />
+                <ThemedText style={styles.heroStatText}>Instant Results</ThemedText>
               </View>
-              <ThemedText type="title" style={styles.welcomeTitle}>
-                Online Exams
-              </ThemedText>
-              <ThemedText style={styles.welcomeDescription}>
-                Take IIT-based practice exams to test your knowledge and track progress
-              </ThemedText>
-              <View style={styles.welcomeStats}>
-                <View style={styles.welcomeStatItem}>
-                  <IconSymbol name="checkmark.circle.fill" size={16} color={ThemeColors.orange} />
-                  <ThemedText style={styles.welcomeStatText}>Instant Results</ThemedText>
-                </View>
-                <View style={styles.welcomeStatItem}>
-                  <IconSymbol name="chart.bar.fill" size={16} color={ThemeColors.deepBlue} />
-                  <ThemedText style={styles.welcomeStatText}>Track Progress</ThemedText>
-                </View>
+              <View style={styles.heroStat}>
+                <IconSymbol name="chart.line.uptrend.xyaxis" size={16} color="#FFD700" />
+                <ThemedText style={styles.heroStatText}>Rank Predictor</ThemedText>
+              </View>
+              <View style={styles.heroStat}>
+                <IconSymbol name="clock.fill" size={16} color="#FFD700" />
+                <ThemedText style={styles.heroStatText}>Timed Tests</ThemedText>
               </View>
             </View>
-          </LinearGradient>
-        </ThemedView>
+          </View>
+          <View style={styles.heroPattern}>
+            {[...Array(3)].map((_, i) => (
+              <View key={i} style={[styles.patternCircle, {
+                right: -20 + i * 30,
+                top: 10 + i * 20,
+                width: 100 + i * 30,
+                height: 100 + i * 30,
+                opacity: 0.1 - i * 0.02
+              }]} />
+            ))}
+          </View>
+        </LinearGradient>
 
+        {/* Search Bar */}
         <View style={[styles.searchContainer, { backgroundColor: colors.card }]}>
           <IconSymbol name="magnifyingglass" size={20} color={colors.icon} />
           <TextInput
             style={[styles.searchInput, { color: colors.text }]}
-            placeholder="Search exams..."
-            placeholderTextColor={colors.icon}
+            placeholder="Search exams by topic..."
+            placeholderTextColor={colors.icon + '80'}
             value={searchQuery}
             onChangeText={setSearchQuery}
           />
+          {searchQuery ? (
+            <TouchableOpacity onPress={() => setSearchQuery('')}>
+              <IconSymbol name="xmark.circle.fill" size={20} color={colors.icon} />
+            </TouchableOpacity>
+          ) : (
+            <View style={styles.searchFilter}>
+              <IconSymbol name="line.3.horizontal.decrease" size={20} color={colors.icon} />
+            </View>
+          )}
         </View>
+
+        {/* Quick Filters */}
+        {!selectedSubject && !searchQuery && (
+          <ScrollView
+            horizontal
+            showsHorizontalScrollIndicator={false}
+            style={styles.filterScroll}
+            contentContainerStyle={styles.filterContent}
+          >
+            <TouchableOpacity
+              style={[styles.filterChip, activeFilter === 'Popular' && styles.filterChipActive]}
+              onPress={() => setActiveFilter('Popular')}
+              activeOpacity={0.7}
+            >
+              <IconSymbol name="flame.fill" size={14} color={activeFilter === 'Popular' ? "#FFD700" : colors.icon} />
+              <ThemedText style={[styles.filterChipText, activeFilter === 'Popular' && styles.filterChipTextActive]}>Popular</ThemedText>
+            </TouchableOpacity>
+            <TouchableOpacity
+              style={[styles.filterChip, activeFilter === 'Recent' && styles.filterChipActive]}
+              onPress={() => setActiveFilter('Recent')}
+              activeOpacity={0.7}
+            >
+              <IconSymbol name="clock.fill" size={14} color={activeFilter === 'Recent' ? "#FFD700" : colors.icon} />
+              <ThemedText style={[styles.filterChipText, activeFilter === 'Recent' && styles.filterChipTextActive]}>Recent</ThemedText>
+            </TouchableOpacity>
+            <TouchableOpacity
+              style={[styles.filterChip, activeFilter === 'Hard' && styles.filterChipActive]}
+              onPress={() => setActiveFilter('Hard')}
+              activeOpacity={0.7}
+            >
+              <IconSymbol name="chart.line.uptrend.xyaxis" size={14} color={activeFilter === 'Hard' ? "#FFD700" : colors.icon} />
+              <ThemedText style={[styles.filterChipText, activeFilter === 'Hard' && styles.filterChipTextActive]}>Hard</ThemedText>
+            </TouchableOpacity>
+            <TouchableOpacity
+              style={[styles.filterChip, activeFilter === 'Quick Tests' && styles.filterChipActive]}
+              onPress={() => setActiveFilter('Quick Tests')}
+              activeOpacity={0.7}
+            >
+              <IconSymbol name="bolt.fill" size={14} color={activeFilter === 'Quick Tests' ? "#FFD700" : colors.icon} />
+              <ThemedText style={[styles.filterChipText, activeFilter === 'Quick Tests' && styles.filterChipTextActive]}>Quick Tests</ThemedText>
+            </TouchableOpacity>
+          </ScrollView>
+        )}
+
+        {selectedSubject && (
+          <TouchableOpacity
+            style={[styles.backButton, { backgroundColor: colors.card }]}
+            onPress={() => setSelectedSubject(null)}
+            activeOpacity={0.7}>
+            <IconSymbol name="chevron.left" size={20} color={colors.icon} />
+            <ThemedText style={styles.backButtonText}>Back to Subjects</ThemedText>
+            <View style={styles.selectedSubjectBadge}>
+              <ThemedText style={styles.selectedSubjectText}>{selectedSubject}</ThemedText>
+            </View>
+          </TouchableOpacity>
+        )}
+
         {loading ? (
           <View style={styles.skeletonContainer}>
-            <ExamSkeleton count={4} />
+            <ExamSkeleton count={6} />
           </View>
-        ) : filteredExams.length === 0 ? (
-          <ThemedView style={styles.emptyContainer}>
-            <ThemedView style={[styles.emptyCard, { backgroundColor: colors.card }]}>
-              <LinearGradient
-                colors={[ThemeColors.orange + '20', ThemeColors.deepBlue + '15']}
-                start={{ x: 0, y: 0 }}
-                end={{ x: 1, y: 1 }}
-                style={styles.emptyGradient}>
-                <View style={[styles.emptyIconContainer, { backgroundColor: ThemeColors.orange + '30' }]}>
-                  <LinearGradient
-                    colors={[ThemeColors.orange, '#FF8C5A']}
-                    start={{ x: 0, y: 0 }}
-                    end={{ x: 1, y: 1 }}
-                    style={styles.emptyIconGradient}>
-                    <IconSymbol name="doc.text.fill" size={64} color={ThemeColors.white} />
-                  </LinearGradient>
-                </View>
-                <ThemedText type="title" style={styles.emptyText}>No Exams Yet</ThemedText>
-                <ThemedText style={styles.emptySubtext}>
-                  Create your first exam to start testing knowledge and tracking progress
-                </ThemedText>
-                <TouchableOpacity
-                  style={styles.emptyButton}
-                  onPress={() => router.push('/exam-create')}
-                  activeOpacity={0.8}>
-                  <LinearGradient
-                    colors={[ThemeColors.orange, '#FF8C5A']}
-                    start={{ x: 0, y: 0 }}
-                    end={{ x: 1, y: 1 }}
-                    style={styles.emptyButtonGradient}>
-                    <IconSymbol name="plus.circle.fill" size={20} color={ThemeColors.white} />
-                    <ThemedText style={{ color: ThemeColors.white, fontWeight: '700', marginLeft: 8 }}>
-                      Create Exam
-                    </ThemedText>
-                  </LinearGradient>
-                </TouchableOpacity>
-              </LinearGradient>
-            </ThemedView>
-          </ThemedView>
-        ) : (
-          <View style={styles.examGrid}>
-            {filteredExams.map(exam => (
-              <Link
-                key={exam._id || exam.id}
-                href={{
-                  pathname: '/exam-take',
-                  params: { examId: exam._id || exam.id || '' },
-                }}
-                asChild>
-                <TouchableOpacity
-                  style={[styles.examCard, { backgroundColor: colors.card }]}
-                  activeOpacity={0.85}>
-                  <View style={styles.thumbnailContainer}>
+        ) : selectedSubject ? (
+          // Show exams for selected subject
+          filteredExams.length === 0 ? (
+            <View style={styles.emptyContainer}>
+              <View style={[styles.emptyCard]}>
+                <LinearGradient
+                  colors={['#667eea20', '#764ba220']}
+                  style={styles.emptyGradient}
+                >
+                  <View style={styles.emptyIconWrapper}>
+                    <IconSymbol name="doc.text.magnifyingglass" size={60} color={ThemeColors.orange} />
+                  </View>
+                  <ThemedText style={styles.emptyTitle}>No Exams Found</ThemedText>
+                  <ThemedText style={styles.emptyDescription}>
+                    {searchQuery
+                      ? `No exams matching "${searchQuery}" in ${selectedSubject}`
+                      : `No exams available for ${selectedSubject} yet`
+                    }
+                  </ThemedText>
+                  <TouchableOpacity
+                    style={styles.emptyButton}
+                    onPress={() => {
+                      setSearchQuery('');
+                      if (searchQuery) return;
+                      setSelectedSubject(null);
+                    }}
+                  >
                     <LinearGradient
-                      colors={[ThemeColors.orange + '25', ThemeColors.deepBlue + '20', ThemeColors.orange + '15']}
+                      colors={['#667eea', '#764ba2']}
+                      style={styles.emptyButtonGradient}
+                    >
+                      <ThemedText style={styles.emptyButtonText}>
+                        {searchQuery ? 'Clear Search' : 'Browse All Subjects'}
+                      </ThemedText>
+                    </LinearGradient>
+                  </TouchableOpacity>
+                </LinearGradient>
+              </View>
+            </View>
+          ) : (
+            <View style={styles.examGrid}>
+              {filteredExams.map((exam, index) => {
+                const subjectDetails = getSubjectDetails(exam.subject);
+                return (
+                  <Link
+                    key={exam._id || exam.id}
+                    href={{
+                      pathname: '/exam-take',
+                      params: { examId: exam._id || exam.id || '' },
+                    }}
+                    asChild>
+                    <TouchableOpacity
+                      style={[styles.examCard, { backgroundColor: colors.card }]}
+                      activeOpacity={0.95}>
+                      <LinearGradient
+                        colors={subjectDetails.gradient}
+                        start={{ x: 0, y: 0 }}
+                        end={{ x: 1, y: 0 }}
+                        style={styles.examCardHeader}
+                      >
+                        <View style={styles.examCardIcon}>
+                          <IconSymbol name={subjectDetails.icon as any} size={24} color="#FFF" />
+                        </View>
+                        <View style={styles.examCardBadge}>
+                          <ThemedText style={styles.examCardBadgeText}>{exam.subject}</ThemedText>
+                        </View>
+                      </LinearGradient>
+
+                      <View style={styles.examCardContent}>
+                        <ThemedText style={styles.examCardTitle} numberOfLines={2}>
+                          {exam.title}
+                        </ThemedText>
+
+                        <View style={styles.examCardMeta}>
+                          <View style={styles.examMetaItem}>
+                            <IconSymbol name="list.bullet" size={14} color={subjectDetails.color} />
+                            <ThemedText style={styles.examMetaText}>
+                              {exam.questions.length} Ques
+                            </ThemedText>
+                          </View>
+                          <View style={styles.examMetaItem}>
+                            <IconSymbol name="clock.fill" size={14} color={subjectDetails.accent} />
+                            <ThemedText style={styles.examMetaText}>
+                              {exam.duration} min
+                            </ThemedText>
+                          </View>
+                          <View style={styles.examMetaItem}>
+                            <IconSymbol name="chart.bar.fill" size={14} color="#4CAF50" />
+                            <ThemedText style={styles.examMetaText}>
+                              {exam.questions.reduce((acc, q) => acc + (q.marks || 4), 0)} Marks
+                            </ThemedText>
+                          </View>
+                        </View>
+
+                        {exam.startTime && exam.endTime && (
+                          <View style={styles.examDateContainer}>
+                            <IconSymbol name="calendar" size={12} color={colors.icon} />
+                            <ThemedText style={styles.examDate}>
+                              {new Date(exam.startTime).toLocaleDateString('en-US', {
+                                day: 'numeric',
+                                month: 'short'
+                              })} - {new Date(exam.endTime).toLocaleDateString('en-US', {
+                                day: 'numeric',
+                                month: 'short'
+                              })}
+                            </ThemedText>
+                          </View>
+                        )}
+
+                        <View style={styles.examCardFooter}>
+                          <View style={styles.difficultyIndicator}>
+                            <View style={[styles.difficultyDot, { backgroundColor: '#4CAF50' }]} />
+                            <ThemedText style={styles.difficultyText}>Medium</ThemedText>
+                          </View>
+                          <LinearGradient
+                            colors={[subjectDetails.color + '20', subjectDetails.accent + '20']}
+                            style={styles.startButton}
+                          >
+                            <ThemedText style={[styles.startButtonText, { color: subjectDetails.color }]}>
+                              Start Test
+                            </ThemedText>
+                            <IconSymbol name="arrow.right" size={12} color={subjectDetails.color} />
+                          </LinearGradient>
+                        </View>
+                      </View>
+                    </TouchableOpacity>
+                  </Link>
+                );
+              })}
+            </View>
+          )
+        ) : (
+          // Show subject folders with enhanced UI
+          <>
+            {/* Subject Grid */}
+            <View style={styles.sectionHeader}>
+              <ThemedText style={styles.sectionTitle}>Browse by Subject</ThemedText>
+              <ThemedText style={styles.sectionSubtitle}>Chapter-wise practice tests</ThemedText>
+            </View>
+
+            <View style={styles.subjectGrid}>
+              {SUBJECTS.map(subject => {
+                const subjectExams = examsBySubject[subject] || [];
+                const subjectDetails = getSubjectDetails(subject);
+                const examCount = subjectExams.length;
+
+                if (examCount === 0) return null;
+
+                return (
+                  <TouchableOpacity
+                    key={subject}
+                    style={styles.subjectCard}
+                    onPress={() => setSelectedSubject(subject)}
+                    activeOpacity={0.9}>
+                    <LinearGradient
+                      colors={subjectDetails.gradient}
                       start={{ x: 0, y: 0 }}
                       end={{ x: 1, y: 1 }}
-                      style={styles.examGradient}>
-                      <View style={styles.examIconWrapper}>
-                        <IconSymbol name="doc.text.fill" size={56} color={ThemeColors.orange} />
+                      style={styles.subjectCardGradient}
+                    >
+                      <View style={styles.subjectCardHeader}>
+                        <View style={styles.subjectIconContainer}>
+                          <IconSymbol name={subjectDetails.icon as any} size={28} color="#FFF" />
+                        </View>
+                        <View style={styles.subjectCountBadge}>
+                          <ThemedText style={styles.subjectCountText}>{examCount}</ThemedText>
+                        </View>
                       </View>
-                      <View style={styles.examLines}>
-                        <View style={[styles.examLine, { width: '75%' }]} />
-                        <View style={[styles.examLine, { width: '85%' }]} />
-                        <View style={[styles.examLine, { width: '70%' }]} />
-                        <View style={[styles.examLine, { width: '80%' }]} />
+                      <ThemedText style={styles.subjectCardTitle}>{subject}</ThemedText>
+                      <ThemedText style={styles.subjectCardSubtitle}>
+                        {examCount} Practice {examCount === 1 ? 'Test' : 'Tests'}
+                      </ThemedText>
+                      <View style={styles.subjectCardFooter}>
+                        <View style={styles.subjectProgress}>
+                          <View style={[styles.subjectProgressBar, { width: '60%' }]} />
+                        </View>
+                        <IconSymbol name="arrow.right.circle.fill" size={20} color="#FFF" />
                       </View>
                     </LinearGradient>
-                    <View style={styles.examOverlay}>
-                      <View style={styles.examBadge}>
-                        <IconSymbol name="doc.text.fill" size={10} color={ThemeColors.white} />
-                        <ThemedText style={styles.examBadgeText}>EXAM</ThemedText>
-                      </View>
-                    </View>
-                    <View style={styles.playOverlay}>
-                      <View style={styles.playIconContainer}>
-                        <IconSymbol name="play.fill" size={24} color={ThemeColors.white} />
-                      </View>
-                    </View>
+                  </TouchableOpacity>
+                );
+              })}
+            </View>
+
+            {/* Recent Exams Section */}
+            {exams.length > 0 && (
+              <>
+                <View style={[styles.sectionHeader, styles.recentHeader]}>
+                  <View>
+                    <ThemedText style={styles.sectionTitle}>Recent Exams</ThemedText>
+                    <ThemedText style={styles.sectionSubtitle}>Continue your preparation</ThemedText>
                   </View>
-                  <View style={styles.examInfo}>
-                    <ThemedText type="defaultSemiBold" numberOfLines={2} style={styles.examTitle}>
-                      {exam.title}
+                  <TouchableOpacity>
+                    <ThemedText style={styles.viewAllText}>View All</ThemedText>
+                  </TouchableOpacity>
+                </View>
+
+                <ScrollView
+                  horizontal
+                  showsHorizontalScrollIndicator={false}
+                  style={styles.recentScroll}
+                  contentContainerStyle={styles.recentContent}
+                >
+                  {exams.slice(0, 5).map((exam, index) => {
+                    const subjectDetails = getSubjectDetails(exam.subject);
+                    return (
+                      <Link
+                        key={exam._id || exam.id}
+                        href={{
+                          pathname: '/exam-take',
+                          params: { examId: exam._id || exam.id || '' },
+                        }}
+                        asChild>
+                        <TouchableOpacity
+                          style={[styles.recentCard, { backgroundColor: colors.card }]}
+                          activeOpacity={0.9}
+                        >
+                          <LinearGradient
+                            colors={[subjectDetails.color + '15', subjectDetails.accent + '15']}
+                            style={styles.recentCardGradient}
+                          >
+                            <View style={[styles.recentIcon, { backgroundColor: subjectDetails.color + '20' }]}>
+                              <IconSymbol name={subjectDetails.icon as any} size={20} color={subjectDetails.color} />
+                            </View>
+                            <View style={styles.recentInfo}>
+                              <ThemedText style={styles.recentTitle} numberOfLines={1}>
+                                {exam.title}
+                              </ThemedText>
+                              <View style={styles.recentMeta}>
+                                <IconSymbol name="clock.fill" size={10} color={colors.icon} />
+                                <ThemedText style={styles.recentMetaText}>{exam.duration} min</ThemedText>
+                                <View style={styles.recentDot} />
+                                <ThemedText style={styles.recentMetaText}>{exam.questions.length} Q</ThemedText>
+                              </View>
+                            </View>
+                          </LinearGradient>
+                        </TouchableOpacity>
+                      </Link>
+                    );
+                  })}
+                </ScrollView>
+              </>
+            )}
+
+            {/* Empty State */}
+            {Object.keys(examsBySubject).length === 0 && (
+              <View style={styles.emptyContainer}>
+                <View style={[styles.emptyCard]}>
+                  <LinearGradient
+                    colors={['#667eea20', '#764ba220']}
+                    style={styles.emptyGradient}
+                  >
+                    <View style={styles.emptyIconWrapper}>
+                      <IconSymbol name="doc.text.fill" size={60} color={ThemeColors.orange} />
+                    </View>
+                    <ThemedText style={styles.emptyTitle}>No Exams Available</ThemedText>
+                    <ThemedText style={styles.emptyDescription}>
+                      {userStandard
+                        ? `Exams for Class ${userStandard} will be added soon`
+                        : 'Check back later for new practice tests'
+                      }
                     </ThemedText>
-                    <View style={styles.examDetailsRow}>
-                      <View style={styles.examDetailItem}>
-                        <IconSymbol name="list.bullet" size={12} color={ThemeColors.orange} />
-                        <ThemedText style={styles.examDetails}>
-                          {exam.questions.length} Questions
-                        </ThemedText>
-                      </View>
-                      <View style={styles.examDetailItem}>
-                        <IconSymbol name="clock.fill" size={12} color={ThemeColors.deepBlue} />
-                        <ThemedText style={styles.examDetails}>
-                          {exam.duration} min
-                        </ThemedText>
-                      </View>
-                    </View>
-                    {exam.startTime && exam.endTime && (
-                      <ThemedText style={styles.examTime} numberOfLines={1}>
-                        {new Date(exam.startTime).toLocaleDateString()} - {new Date(exam.endTime).toLocaleDateString()}
-                      </ThemedText>
-                    )}
-                  </View>
-                </TouchableOpacity>
-              </Link>
-            ))}
-          </View>
+                    <TouchableOpacity style={styles.emptyButton}>
+                      <LinearGradient
+                        colors={['#667eea', '#764ba2']}
+                        style={styles.emptyButtonGradient}
+                      >
+                        <IconSymbol name="bell.fill" size={16} color="#FFF" />
+                        <ThemedText style={styles.emptyButtonText}>Notify Me</ThemedText>
+                      </LinearGradient>
+                    </TouchableOpacity>
+                  </LinearGradient>
+                </View>
+              </View>
+            )}
+          </>
         )}
       </ScrollView>
     </ThemedView>
@@ -250,151 +550,189 @@ const styles = StyleSheet.create({
   container: {
     flex: 1,
   },
-  searchInput: {
-    flex: 1,
-    fontSize: 16,
-    fontWeight: '500',
-  },
   examList: {
     flex: 1,
   },
   examListContent: {
-    padding: 20,
     paddingBottom: 100,
   },
-  welcomeCard: {
-    borderRadius: 32,
-    marginBottom: 28,
-    overflow: 'hidden',
-    borderWidth: 1.5,
-    borderColor: ThemeColors.white + '50',
-    ...Platform.select({
-      ios: {
-        shadowColor: ThemeColors.orange,
-        shadowOffset: { width: 0, height: 16 },
-        shadowOpacity: 0.25,
-        shadowRadius: 28,
-      },
-      android: {
-        elevation: 16,
-      },
-    }),
-  },
-  welcomeGradient: {
-    padding: 36,
-    borderWidth: 1,
-    borderColor: ThemeColors.white + '30',
-    borderRadius: 32,
-  },
-  welcomeContent: {
-    alignItems: 'center',
-  },
-  welcomeIconWrapper: {
+  // Hero Banner
+  heroBanner: {
+    paddingHorizontal: 24,
+    paddingVertical: 32,
+    marginBottom: 24,
     position: 'relative',
-    marginBottom: 20,
-  },
-  welcomeIconContainer: {
-    width: 100,
-    height: 100,
-    borderRadius: 28,
-    justifyContent: 'center',
-    alignItems: 'center',
     overflow: 'hidden',
-    ...Platform.select({
-      ios: {
-        shadowColor: ThemeColors.orange,
-        shadowOffset: { width: 0, height: 8 },
-        shadowOpacity: 0.5,
-        shadowRadius: 20,
-      },
-      android: {
-        elevation: 16,
-      },
-    }),
+    borderBottomLeftRadius: 30,
+    borderBottomRightRadius: 30,
   },
-  welcomeIconGradient: {
-    width: '100%',
-    height: '100%',
-    justifyContent: 'center',
-    alignItems: 'center',
+  heroContent: {
     position: 'relative',
+    zIndex: 2,
   },
-  welcomeIconGlow: {
-    position: 'absolute',
-    width: '100%',
-    height: '100%',
-    backgroundColor: ThemeColors.white + '25',
-    borderRadius: 28,
+  heroBadge: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    backgroundColor: 'rgba(255,255,255,0.2)',
+    alignSelf: 'flex-start',
+    paddingHorizontal: 12,
+    paddingVertical: 6,
+    borderRadius: 20,
+    marginBottom: 16,
+    gap: 6,
   },
-  welcomeIconRing: {
-    position: 'absolute',
-    width: 120,
-    height: 120,
-    borderRadius: 35,
-    borderWidth: 3,
-    borderColor: ThemeColors.orange + '30',
-    top: -10,
-    left: -10,
-  },
-  welcomeTitle: {
-    fontSize: 32,
-    fontWeight: '900',
-    marginBottom: 12,
-    textAlign: 'center',
+  heroBadgeText: {
+    color: '#FFF',
+    fontSize: 12,
+    fontWeight: '700',
     letterSpacing: 0.5,
   },
-  welcomeDescription: {
-    fontSize: 16,
-    opacity: 0.95,
-    textAlign: 'center',
-    lineHeight: 24,
-    fontWeight: '600',
-    marginBottom: 20,
+  heroTitle: {
+    color: '#FFF',
+    fontSize: 32,
+    fontWeight: '900',
+    lineHeight: 40,
+    marginBottom: 8,
+    textShadowColor: 'rgba(0,0,0,0.2)',
+    textShadowOffset: { width: 0, height: 2 },
+    textShadowRadius: 4,
   },
-  welcomeStats: {
+  heroSubtitle: {
+    color: '#FFF',
+    fontSize: 14,
+    opacity: 0.9,
+    marginBottom: 20,
+    fontWeight: '500',
+  },
+  heroStats: {
     flexDirection: 'row',
     gap: 20,
-    marginTop: 8,
   },
-  welcomeStatItem: {
+  heroStat: {
     flexDirection: 'row',
     alignItems: 'center',
-    backgroundColor: ThemeColors.lightNeutral,
+    gap: 6,
+  },
+  heroStatText: {
+    color: '#FFF',
+    fontSize: 13,
+    fontWeight: '600',
+  },
+  heroPattern: {
+    position: 'absolute',
+    right: 0,
+    top: 0,
+    bottom: 0,
+    width: '50%',
+  },
+  patternCircle: {
+    position: 'absolute',
+    borderRadius: 100,
+    backgroundColor: '#FFF',
+  },
+  // Search
+  searchContainer: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    marginHorizontal: 20,
+    marginBottom: 16,
     paddingHorizontal: 16,
-    paddingVertical: 10,
+    paddingVertical: 12,
     borderRadius: 16,
-    gap: 8,
+    gap: 12,
     ...Platform.select({
       ios: {
         shadowColor: '#000',
         shadowOffset: { width: 0, height: 2 },
-        shadowOpacity: 0.08,
+        shadowOpacity: 0.05,
         shadowRadius: 8,
       },
       android: {
-        elevation: 3,
+        elevation: 2,
       },
     }),
   },
-  welcomeStatText: {
-    fontSize: 13,
-    fontWeight: '700',
-    opacity: 0.9,
+  searchInput: {
+    flex: 1,
+    fontSize: 16,
+    fontWeight: '500',
+    paddingVertical: 0,
   },
-  searchContainer: {
+  searchFilter: {
+    padding: 4,
+  },
+  // Filter Chips
+  filterScroll: {
+    marginBottom: 24,
+  },
+  filterContent: {
+    paddingHorizontal: 20,
+    gap: 12,
+  },
+  filterChip: {
     flexDirection: 'row',
     alignItems: 'center',
-    marginBottom: 20,
-    padding: 18,
-    borderRadius: 20,
-    gap: 14,
-    borderWidth: 1.5,
-    borderColor: ThemeColors.white + '40',
+    paddingHorizontal: 16,
+    paddingVertical: 10,
+    backgroundColor: '#F5F5F5',
+    borderRadius: 30,
+    gap: 8,
+  },
+  filterChipActive: {
+    backgroundColor: '#667eea',
+  },
+  filterChipText: {
+    fontSize: 14,
+    fontWeight: '600',
+    color: '#666',
+  },
+  filterChipTextActive: {
+    color: '#FFF',
+  },
+  // Section Headers
+  sectionHeader: {
+    flexDirection: 'row',
+    justifyContent: 'space-between',
+    alignItems: 'flex-end',
+    paddingHorizontal: 20,
+    marginBottom: 16,
+  },
+  recentHeader: {
+    marginTop: 32,
+  },
+  sectionTitle: {
+    fontSize: 22,
+    fontWeight: '900',
+    letterSpacing: -0.5,
+  },
+  sectionSubtitle: {
+    fontSize: 14,
+    opacity: 0.6,
+    fontWeight: '500',
+    marginTop: 4,
+  },
+  viewAllText: {
+    fontSize: 14,
+    fontWeight: '700',
+    color: '#667eea',
+  },
+  // Subject Grid
+  subjectGrid: {
+    flexDirection: 'row',
+    flexWrap: 'wrap',
+    paddingHorizontal: 16,
+    gap: 16,
+  },
+  subjectCard: {
+    width: '46%',
+    aspectRatio: 1,
+    borderRadius: 24,
+    overflow: 'hidden',
     ...Platform.select({
       ios: {
         shadowColor: '#000',
         shadowOffset: { width: 0, height: 4 },
-        shadowOpacity: 0.1,
+        shadowOpacity: 0.15,
         shadowRadius: 12,
       },
       android: {
@@ -402,285 +740,310 @@ const styles = StyleSheet.create({
       },
     }),
   },
-  examGrid: {
+  subjectCardGradient: {
+    flex: 1,
+    padding: 16,
+    justifyContent: 'space-between',
+  },
+  subjectCardHeader: {
     flexDirection: 'row',
-    flexWrap: 'wrap',
-    gap: 16,
-    marginTop: 4,
+    justifyContent: 'space-between',
+    alignItems: 'flex-start',
   },
-  examCard: {
-    width: '47%',
-    borderRadius: 24,
-    overflow: 'hidden',
-    borderWidth: 1.5,
-    borderColor: ThemeColors.white + '40',
-    ...Platform.select({
-      ios: {
-        shadowColor: ThemeColors.orange,
-        shadowOffset: { width: 0, height: 8 },
-        shadowOpacity: 0.15,
-        shadowRadius: 20,
-      },
-      android: {
-        elevation: 10,
-      },
-    }),
-  },
-  thumbnailContainer: {
-    width: '100%',
-    aspectRatio: 16 / 9,
-    position: 'relative',
-    backgroundColor: ThemeColors.lightNeutral,
-    overflow: 'hidden',
-  },
-  examGradient: {
-    width: '100%',
-    height: '100%',
+  subjectIconContainer: {
+    width: 48,
+    height: 48,
+    borderRadius: 16,
+    backgroundColor: 'rgba(255,255,255,0.2)',
     justifyContent: 'center',
     alignItems: 'center',
-    padding: 20,
   },
-  examIconWrapper: {
-    marginBottom: 16,
+  subjectCountBadge: {
+    backgroundColor: 'rgba(255,255,255,0.3)',
+    paddingHorizontal: 10,
+    paddingVertical: 4,
+    borderRadius: 20,
   },
-  examLines: {
-    width: '100%',
+  subjectCountText: {
+    color: '#FFF',
+    fontSize: 14,
+    fontWeight: '800',
+  },
+  subjectCardTitle: {
+    color: '#FFF',
+    fontSize: 20,
+    fontWeight: '800',
+    marginTop: 8,
+  },
+  subjectCardSubtitle: {
+    color: '#FFF',
+    fontSize: 12,
+    opacity: 0.9,
+    fontWeight: '500',
+  },
+  subjectCardFooter: {
+    flexDirection: 'row',
+    justifyContent: 'space-between',
     alignItems: 'center',
-    gap: 8,
+    marginTop: 8,
   },
-  examLine: {
+  subjectProgress: {
+    flex: 1,
     height: 4,
-    backgroundColor: ThemeColors.orange + '50',
+    backgroundColor: 'rgba(255,255,255,0.3)',
+    borderRadius: 2,
+    marginRight: 12,
+  },
+  subjectProgressBar: {
+    height: '100%',
+    backgroundColor: '#FFF',
     borderRadius: 2,
   },
-  examOverlay: {
-    position: 'absolute',
-    top: 0,
-    left: 0,
-    right: 0,
-    bottom: 0,
-    justifyContent: 'flex-end',
-    alignItems: 'flex-end',
-    padding: 10,
+  // Exam Grid
+  examGrid: {
+    paddingHorizontal: 16,
+    gap: 16,
   },
-  examBadge: {
-    flexDirection: 'row',
-    alignItems: 'center',
-    backgroundColor: ThemeColors.orange + 'F0',
-    paddingHorizontal: 10,
-    paddingVertical: 6,
-    borderRadius: 8,
-    gap: 5,
-    borderWidth: 1,
-    borderColor: ThemeColors.white + '40',
+  examCard: {
+    borderRadius: 24,
+    overflow: 'hidden',
     ...Platform.select({
       ios: {
         shadowColor: '#000',
         shadowOffset: { width: 0, height: 2 },
-        shadowOpacity: 0.2,
-        shadowRadius: 4,
+        shadowOpacity: 0.1,
+        shadowRadius: 8,
       },
       android: {
-        elevation: 3,
+        elevation: 4,
       },
     }),
   },
-  examBadgeText: {
-    color: ThemeColors.white,
-    fontSize: 11,
-    fontWeight: '900',
-    letterSpacing: 0.8,
+  examCardHeader: {
+    flexDirection: 'row',
+    justifyContent: 'space-between',
+    alignItems: 'center',
+    paddingHorizontal: 16,
+    paddingVertical: 12,
   },
-  playOverlay: {
-    position: 'absolute',
-    top: 0,
-    left: 0,
-    right: 0,
-    bottom: 0,
+  examCardIcon: {
+    width: 40,
+    height: 40,
+    borderRadius: 12,
+    backgroundColor: 'rgba(255,255,255,0.2)',
     justifyContent: 'center',
     alignItems: 'center',
-    backgroundColor: 'rgba(0, 0, 0, 0.15)',
   },
-  playIconContainer: {
-    width: 60,
-    height: 60,
-    borderRadius: 30,
-    backgroundColor: ThemeColors.orange + 'F0',
-    justifyContent: 'center',
-    alignItems: 'center',
-    borderWidth: 3.5,
-    borderColor: ThemeColors.white + '60',
-    ...Platform.select({
-      ios: {
-        shadowColor: ThemeColors.orange,
-        shadowOffset: { width: 0, height: 6 },
-        shadowOpacity: 0.4,
-        shadowRadius: 12,
-      },
-      android: {
-        elevation: 8,
-      },
-    }),
+  examCardBadge: {
+    backgroundColor: 'rgba(255,255,255,0.3)',
+    paddingHorizontal: 12,
+    paddingVertical: 4,
+    borderRadius: 20,
   },
-  examInfo: {
-    padding: 16,
-    backgroundColor: ThemeColors.white + 'F8',
-  },
-  examTitle: {
-    fontSize: 16,
-    fontWeight: '900',
-    lineHeight: 22,
-    letterSpacing: 0.3,
-    marginBottom: 10,
-  },
-  examDetailsRow: {
-    flexDirection: 'row',
-    gap: 14,
-    marginBottom: 8,
-  },
-  examDetailItem: {
-    flexDirection: 'row',
-    alignItems: 'center',
-    gap: 5,
-  },
-  examDetails: {
+  examCardBadgeText: {
+    color: '#FFF',
     fontSize: 12,
-    opacity: 0.85,
     fontWeight: '700',
-    letterSpacing: 0.2,
   },
-  examTime: {
-    fontSize: 11,
-    opacity: 0.75,
-    fontWeight: '600',
-    marginTop: 6,
-    letterSpacing: 0.2,
+  examCardContent: {
+    padding: 16,
   },
-  emptyContainer: {
+  examCardTitle: {
+    fontSize: 18,
+    fontWeight: '800',
+    lineHeight: 24,
+    marginBottom: 12,
+  },
+  examCardMeta: {
+    flexDirection: 'row',
+    flexWrap: 'wrap',
+    gap: 16,
+    marginBottom: 12,
+  },
+  examMetaItem: {
+    flexDirection: 'row',
     alignItems: 'center',
+    gap: 6,
+  },
+  examMetaText: {
+    fontSize: 13,
+    fontWeight: '600',
+    opacity: 0.8,
+  },
+  examDateContainer: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    gap: 6,
+    marginBottom: 12,
+  },
+  examDate: {
+    fontSize: 12,
+    opacity: 0.6,
+    fontWeight: '500',
+  },
+  examCardFooter: {
+    flexDirection: 'row',
+    justifyContent: 'space-between',
+    alignItems: 'center',
+    marginTop: 8,
+  },
+  difficultyIndicator: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    gap: 6,
+  },
+  difficultyDot: {
+    width: 8,
+    height: 8,
+    borderRadius: 4,
+  },
+  difficultyText: {
+    fontSize: 12,
+    fontWeight: '600',
+    opacity: 0.7,
+  },
+  startButton: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    paddingHorizontal: 14,
+    paddingVertical: 8,
+    borderRadius: 20,
+    gap: 6,
+  },
+  startButtonText: {
+    fontSize: 13,
+    fontWeight: '800',
+  },
+  // Recent Exams
+  recentScroll: {
+    marginBottom: 20,
+  },
+  recentContent: {
+    paddingHorizontal: 16,
+    gap: 12,
+  },
+  recentCard: {
+    width: 200,
+    borderRadius: 20,
+    overflow: 'hidden',
+  },
+  recentCardGradient: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    padding: 12,
+    gap: 12,
+  },
+  recentIcon: {
+    width: 40,
+    height: 40,
+    borderRadius: 12,
     justifyContent: 'center',
-    paddingVertical: 60,
+    alignItems: 'center',
+  },
+  recentInfo: {
+    flex: 1,
+  },
+  recentTitle: {
+    fontSize: 14,
+    fontWeight: '700',
+    marginBottom: 4,
+  },
+  recentMeta: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    gap: 4,
+  },
+  recentMetaText: {
+    fontSize: 10,
+    fontWeight: '600',
+    opacity: 0.6,
+  },
+  recentDot: {
+    width: 3,
+    height: 3,
+    borderRadius: 1.5,
+    backgroundColor: '#999',
+    marginHorizontal: 4,
+  },
+  // Back Button
+  backButton: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    marginHorizontal: 20,
+    marginBottom: 16,
+    padding: 12,
+    borderRadius: 16,
+    gap: 8,
+  },
+  backButtonText: {
+    fontSize: 16,
+    fontWeight: '600',
+    flex: 1,
+  },
+  selectedSubjectBadge: {
+    backgroundColor: '#667eea20',
+    paddingHorizontal: 12,
+    paddingVertical: 4,
+    borderRadius: 20,
+  },
+  selectedSubjectText: {
+    fontSize: 13,
+    fontWeight: '700',
+    color: '#667eea',
+  },
+  // Empty States
+  emptyContainer: {
+    paddingHorizontal: 20,
+    paddingVertical: 40,
   },
   emptyCard: {
-    borderRadius: 28,
+    borderRadius: 32,
     overflow: 'hidden',
-    width: '100%',
-    maxWidth: 400,
-    ...Platform.select({
-      ios: {
-        shadowColor: '#000',
-        shadowOffset: { width: 0, height: 12 },
-        shadowOpacity: 0.2,
-        shadowRadius: 20,
-      },
-      android: {
-        elevation: 12,
-      },
-    }),
   },
   emptyGradient: {
     padding: 48,
     alignItems: 'center',
   },
-  emptyIconContainer: {
-    width: 120,
-    height: 120,
+  emptyIconWrapper: {
+    width: 100,
+    height: 100,
     borderRadius: 30,
+    backgroundColor: 'rgba(102, 126, 234, 0.1)',
     justifyContent: 'center',
     alignItems: 'center',
     marginBottom: 24,
-    overflow: 'hidden',
-    ...Platform.select({
-      ios: {
-        shadowColor: ThemeColors.orange,
-        shadowOffset: { width: 0, height: 8 },
-        shadowOpacity: 0.4,
-        shadowRadius: 16,
-      },
-      android: {
-        elevation: 12,
-      },
-    }),
   },
-  emptyIconGradient: {
-    width: '100%',
-    height: '100%',
-    justifyContent: 'center',
-    alignItems: 'center',
-  },
-  emptyText: {
-    fontSize: 26,
+  emptyTitle: {
+    fontSize: 24,
     fontWeight: '900',
-    marginTop: 8,
-    marginBottom: 12,
+    marginBottom: 8,
     textAlign: 'center',
-    letterSpacing: 0.5,
   },
-  emptySubtext: {
-    fontSize: 16,
-    marginBottom: 32,
-    opacity: 0.85,
-    fontWeight: '600',
+  emptyDescription: {
+    fontSize: 14,
+    opacity: 0.6,
     textAlign: 'center',
-    lineHeight: 24,
+    marginBottom: 24,
+    lineHeight: 20,
   },
   emptyButton: {
-    borderRadius: 18,
+    borderRadius: 30,
     overflow: 'hidden',
-    ...Platform.select({
-      ios: {
-        shadowColor: ThemeColors.orange,
-        shadowOffset: { width: 0, height: 6 },
-        shadowOpacity: 0.4,
-        shadowRadius: 12,
-      },
-      android: {
-        elevation: 8,
-      },
-    }),
   },
   emptyButtonGradient: {
-    paddingHorizontal: 32,
-    paddingVertical: 16,
     flexDirection: 'row',
     alignItems: 'center',
-    justifyContent: 'center',
+    paddingHorizontal: 24,
+    paddingVertical: 14,
+    gap: 8,
   },
-  iconWrapper: {
-    position: 'relative',
-    marginRight: 18,
-  },
-  iconInnerGlow: {
-    position: 'absolute',
-    width: '100%',
-    height: '100%',
-    backgroundColor: ThemeColors.white + '20',
-    borderRadius: 20,
-  },
-  badgeGradient: {
-    paddingHorizontal: 12,
-    paddingVertical: 8,
-    borderRadius: 12,
-    flexDirection: 'row',
-    alignItems: 'center',
-    gap: 6,
-  },
-  timeIconContainer: {
-    width: 24,
-    height: 24,
-    borderRadius: 6,
-    justifyContent: 'center',
-    alignItems: 'center',
-  },
-  buttonGlow: {
-    position: 'absolute',
-    width: '100%',
-    height: '100%',
-    backgroundColor: ThemeColors.white + '15',
-    borderRadius: 28,
+  emptyButtonText: {
+    color: '#FFF',
+    fontSize: 16,
+    fontWeight: '700',
   },
   skeletonContainer: {
-    paddingTop: 4,
+    paddingHorizontal: 20,
+    paddingTop: 20,
   },
 });
-

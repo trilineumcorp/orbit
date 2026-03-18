@@ -9,7 +9,7 @@ import { Exam, Question } from '@/types';
 import { LinearGradient } from 'expo-linear-gradient';
 import { useRouter } from 'expo-router';
 import React, { useState } from 'react';
-import { Alert, Platform, ScrollView, StyleSheet, TextInput, TouchableOpacity, View } from 'react-native';
+import { Alert, Platform, ScrollView, StyleSheet, TextInput, TouchableOpacity, View, Animated } from 'react-native';
 
 export default function ExamCreateScreen() {
   const router = useRouter();
@@ -76,215 +76,284 @@ export default function ExamCreateScreen() {
         title="Create Exam"
         showBackButton={true}
       />
-      <ScrollView style={styles.content} contentContainerStyle={styles.contentContainer} showsVerticalScrollIndicator={false}>
+      <ScrollView 
+        style={styles.content} 
+        contentContainerStyle={styles.contentContainer} 
+        showsVerticalScrollIndicator={false}
+      >
+        {/* Exam Details Card */}
         <ThemedView style={[styles.formCard, { backgroundColor: colors.card }]}>
           <LinearGradient
-            colors={[ThemeColors.orange + '15', ThemeColors.deepBlue + '10']}
+            colors={[ThemeColors.orange + '08', ThemeColors.deepBlue + '05']}
             start={{ x: 0, y: 0 }}
             end={{ x: 1, y: 1 }}
-            style={styles.formGradient}>
+            style={styles.formGradient}
+          >
             <View style={styles.sectionHeader}>
               <View style={styles.sectionIconWrapper}>
-                <View style={[styles.sectionIconContainer, { backgroundColor: ThemeColors.orange + '25' }]}>
+                <LinearGradient
+                  colors={[ThemeColors.orange, '#5DAFC7']}
+                  start={{ x: 0, y: 0 }}
+                  end={{ x: 1, y: 1 }}
+                  style={styles.sectionIconGradient}
+                >
+                  <IconSymbol name="doc.text.fill" size={24} color={ThemeColors.white} />
+                </LinearGradient>
+              </View>
+              <View>
+                <ThemedText type="subtitle" style={styles.sectionTitle}>
+                  Exam Details
+                </ThemedText>
+                <ThemedText style={styles.sectionSubtitle}>
+                  Basic information about your exam
+                </ThemedText>
+              </View>
+            </View>
+          
+            <View style={styles.inputGroup}>
+              <ThemedText style={styles.inputLabel}>Exam Title</ThemedText>
+              <View style={styles.inputContainer}>
+                <View style={[styles.inputIconContainer, { backgroundColor: ThemeColors.orange + '15' }]}>
+                  <IconSymbol name="doc.text.fill" size={18} color={ThemeColors.orange} />
+                </View>
+                <TextInput
+                  style={[styles.input, { color: colors.text, borderColor: colors.border }]}
+                  placeholder="e.g., Mathematics Final Exam"
+                  placeholderTextColor={colors.icon + '80'}
+                  value={title}
+                  onChangeText={setTitle}
+                />
+              </View>
+            </View>
+
+            <View style={styles.inputGroup}>
+              <ThemedText style={styles.inputLabel}>Duration (minutes)</ThemedText>
+              <View style={styles.inputContainer}>
+                <View style={[styles.inputIconContainer, { backgroundColor: ThemeColors.deepBlue + '15' }]}>
+                  <IconSymbol name="clock.fill" size={18} color={ThemeColors.deepBlue} />
+                </View>
+                <TextInput
+                  style={[styles.input, { color: colors.text, borderColor: colors.border }]}
+                  placeholder="e.g., 60"
+                  placeholderTextColor={colors.icon + '80'}
+                  value={duration}
+                  onChangeText={setDuration}
+                  keyboardType="numeric"
+                />
+              </View>
+            </View>
+          </LinearGradient>
+        </ThemedView>
+
+        {/* Add Question Card */}
+        <ThemedView style={[styles.formCard, { backgroundColor: colors.card }]}>
+          <LinearGradient
+            colors={[ThemeColors.deepBlue + '05', ThemeColors.orange + '05']}
+            start={{ x: 0, y: 0 }}
+            end={{ x: 1, y: 1 }}
+            style={styles.formGradient}
+          >
+            <View style={styles.sectionHeader}>
+              <View style={styles.sectionIconWrapper}>
+                <LinearGradient
+                  colors={[ThemeColors.deepBlue, '#0A2E3D']}
+                  start={{ x: 0, y: 0 }}
+                  end={{ x: 1, y: 1 }}
+                  style={styles.sectionIconGradient}
+                >
+                  <IconSymbol name="plus.circle.fill" size={24} color={ThemeColors.white} />
+                </LinearGradient>
+              </View>
+              <View>
+                <ThemedText type="subtitle" style={styles.sectionTitle}>
+                  Add Question
+                </ThemedText>
+                <ThemedText style={styles.sectionSubtitle}>
+                  {questions.length} {questions.length === 1 ? 'question' : 'questions'} added
+                </ThemedText>
+              </View>
+            </View>
+
+            <View style={styles.inputGroup}>
+              <ThemedText style={styles.inputLabel}>Question</ThemedText>
+              <View style={styles.textAreaContainer}>
+                <TextInput
+                  style={[styles.textArea, { color: colors.text, borderColor: colors.border }]}
+                  placeholder="Enter your question here..."
+                  placeholderTextColor={colors.icon + '80'}
+                  value={currentQuestion.question}
+                  onChangeText={(text) => setCurrentQuestion({ ...currentQuestion, question: text })}
+                  multiline
+                  numberOfLines={4}
+                  textAlignVertical="top"
+                />
+              </View>
+            </View>
+
+            <View style={styles.inputGroup}>
+              <ThemedText style={styles.inputLabel}>Answer Options</ThemedText>
+              {currentQuestion.options.map((option, index) => (
+                <View key={index} style={styles.optionRow}>
+                  <TouchableOpacity
+                    style={[
+                      styles.radioButton,
+                      { borderColor: currentQuestion.correctAnswer === index ? ThemeColors.orange : colors.border + '40' },
+                      currentQuestion.correctAnswer === index && { backgroundColor: ThemeColors.orange },
+                    ]}
+                    onPress={() => setCurrentQuestion({ ...currentQuestion, correctAnswer: index })}
+                    activeOpacity={0.7}
+                  >
+                    {currentQuestion.correctAnswer === index && (
+                      <IconSymbol name="checkmark" size={16} color={ThemeColors.white} />
+                    )}
+                  </TouchableOpacity>
+                  <View style={styles.optionInputContainer}>
+                    <View style={[styles.optionLabelBadge, { backgroundColor: ThemeColors.orange + '15' }]}>
+                      <ThemedText style={styles.optionLabelText}>
+                        {String.fromCharCode(65 + index)}
+                      </ThemedText>
+                    </View>
+                    <TextInput
+                      style={[styles.optionInput, { color: colors.text, borderColor: colors.border + '40' }]}
+                      placeholder={`Option ${String.fromCharCode(65 + index)}`}
+                      placeholderTextColor={colors.icon + '60'}
+                      value={option}
+                      onChangeText={(text) => {
+                        const newOptions = [...currentQuestion.options];
+                        newOptions[index] = text;
+                        setCurrentQuestion({ ...currentQuestion, options: newOptions });
+                      }}
+                    />
+                  </View>
+                </View>
+              ))}
+            </View>
+
+            <View style={styles.marksContainer}>
+              <ThemedText style={styles.inputLabel}>Points</ThemedText>
+              <View style={styles.marksRow}>
+                <TextInput
+                  style={[styles.marksInput, { color: colors.text, borderColor: colors.border + '40' }]}
+                  value={currentQuestion.marks}
+                  onChangeText={(text) => setCurrentQuestion({ ...currentQuestion, marks: text })}
+                  keyboardType="numeric"
+                  placeholder="1"
+                  placeholderTextColor={colors.icon + '60'}
+                />
+                <ThemedText style={styles.marksHint}>points for this question</ThemedText>
+              </View>
+            </View>
+
+            <TouchableOpacity
+              style={styles.addButton}
+              onPress={addQuestion}
+              activeOpacity={0.8}
+            >
+              <LinearGradient
+                colors={[ThemeColors.orange, '#FF8C5A']}
+                start={{ x: 0, y: 0 }}
+                end={{ x: 1, y: 1 }}
+                style={styles.addButtonGradient}
+              >
+                <IconSymbol name="plus.circle.fill" size={20} color={ThemeColors.white} />
+                <ThemedText style={styles.addButtonText}>Add Question</ThemedText>
+              </LinearGradient>
+            </TouchableOpacity>
+          </LinearGradient>
+        </ThemedView>
+
+        {/* Questions Preview */}
+        {questions.length > 0 && (
+          <ThemedView style={[styles.formCard, { backgroundColor: colors.card }]}>
+            <LinearGradient
+              colors={[ThemeColors.orange + '05', ThemeColors.deepBlue + '05']}
+              start={{ x: 0, y: 0 }}
+              end={{ x: 1, y: 1 }}
+              style={styles.formGradient}
+            >
+              <View style={styles.sectionHeader}>
+                <View style={styles.sectionIconWrapper}>
                   <LinearGradient
                     colors={[ThemeColors.orange, '#FF8C5A']}
                     start={{ x: 0, y: 0 }}
                     end={{ x: 1, y: 1 }}
-                    style={styles.sectionIconGradient}>
-                    <IconSymbol name="doc.text.fill" size={24} color={ThemeColors.white} />
+                    style={styles.sectionIconGradient}
+                  >
+                    <IconSymbol name="list.bullet.rectangle.fill" size={24} color={ThemeColors.white} />
                   </LinearGradient>
                 </View>
+                <View>
+                  <ThemedText type="subtitle" style={styles.sectionTitle}>
+                    Questions Preview
+                  </ThemedText>
+                  <ThemedText style={styles.sectionSubtitle}>
+                    Review your questions before saving
+                  </ThemedText>
+                </View>
               </View>
-              <ThemedText type="subtitle" style={styles.sectionTitle}>
-                Exam Details
-              </ThemedText>
-            </View>
-          <View style={styles.inputContainer}>
-            <View style={[styles.inputIconContainer, { backgroundColor: ThemeColors.orange + '15' }]}>
-              <IconSymbol name="doc.text.fill" size={18} color={ThemeColors.orange} />
-            </View>
-            <TextInput
-              style={[styles.input, { color: colors.text, borderColor: colors.border }]}
-              placeholder="Exam Title"
-              placeholderTextColor={colors.icon}
-              value={title}
-              onChangeText={setTitle}
-            />
-          </View>
-          <View style={styles.inputContainer}>
-            <View style={[styles.inputIconContainer, { backgroundColor: ThemeColors.deepBlue + '15' }]}>
-              <IconSymbol name="clock.fill" size={18} color={ThemeColors.deepBlue} />
-            </View>
-            <TextInput
-              style={[styles.input, { color: colors.text, borderColor: colors.border }]}
-              placeholder="Duration (minutes)"
-              placeholderTextColor={colors.icon}
-              value={duration}
-              onChangeText={setDuration}
-              keyboardType="numeric"
-            />
-          </View>
-          </LinearGradient>
-        </ThemedView>
 
-        <ThemedView style={[styles.formCard, { backgroundColor: colors.card }]}>
-          <LinearGradient
-            colors={[ThemeColors.deepBlue + '15', ThemeColors.orange + '10']}
-            start={{ x: 0, y: 0 }}
-            end={{ x: 1, y: 1 }}
-            style={styles.formGradient}>
-            <View style={styles.sectionHeader}>
-              <View style={styles.sectionIconWrapper}>
-                <View style={[styles.sectionIconContainer, { backgroundColor: ThemeColors.deepBlue + '25' }]}>
-                  <LinearGradient
-                    colors={[ThemeColors.deepBlue, '#0A2E3D']}
-                    start={{ x: 0, y: 0 }}
-                    end={{ x: 1, y: 1 }}
-                    style={styles.sectionIconGradient}>
-                    <IconSymbol name="plus.circle.fill" size={24} color={ThemeColors.white} />
-                  </LinearGradient>
-                </View>
-              </View>
-              <ThemedText type="subtitle" style={styles.sectionTitle}>
-                Add Question ({questions.length} added)
-              </ThemedText>
-            </View>
-          <View style={styles.textAreaContainer}>
-            <View style={[styles.textAreaIconContainer, { backgroundColor: ThemeColors.orange + '15' }]}>
-              <IconSymbol name="questionmark.circle.fill" size={18} color={ThemeColors.orange} />
-            </View>
-            <TextInput
-              style={[styles.textArea, { color: colors.text, borderColor: colors.border }]}
-              placeholder="Enter your question here..."
-              placeholderTextColor={colors.icon}
-              value={currentQuestion.question}
-              onChangeText={(text) => setCurrentQuestion({ ...currentQuestion, question: text })}
-              multiline
-            />
-          </View>
-          {currentQuestion.options.map((option, index) => (
-            <View key={index} style={styles.optionRow}>
-              <TouchableOpacity
-                style={[
-                  styles.radioButton,
-                  { borderColor: currentQuestion.correctAnswer === index ? ThemeColors.orange : colors.border },
-                  currentQuestion.correctAnswer === index && { backgroundColor: ThemeColors.orange },
-                ]}
-                onPress={() => setCurrentQuestion({ ...currentQuestion, correctAnswer: index })}
-                activeOpacity={0.7}>
-                {currentQuestion.correctAnswer === index && (
-                  <View style={styles.radioInner} />
-                )}
-              </TouchableOpacity>
-              <View style={styles.optionInputContainer}>
-                <View style={[styles.optionLabelBadge, { backgroundColor: ThemeColors.orange + '20' }]}>
-                  <ThemedText style={styles.optionLabelText}>{String.fromCharCode(65 + index)}</ThemedText>
-                </View>
-                <TextInput
-                  style={[styles.optionInput, { color: colors.text, borderColor: colors.border }]}
-                  placeholder={`Enter option ${String.fromCharCode(65 + index)}`}
-                  placeholderTextColor={colors.icon}
-                  value={option}
-                  onChangeText={(text) => {
-                    const newOptions = [...currentQuestion.options];
-                    newOptions[index] = text;
-                    setCurrentQuestion({ ...currentQuestion, options: newOptions });
-                  }}
-                />
-              </View>
-            </View>
-          ))}
-          <View style={styles.marksRow}>
-            <ThemedText style={{ fontWeight: '600' }}>Marks:</ThemedText>
-            <TextInput
-              style={[styles.marksInput, { color: colors.text, borderColor: colors.border }]}
-              value={currentQuestion.marks}
-              onChangeText={(text) => setCurrentQuestion({ ...currentQuestion, marks: text })}
-              keyboardType="numeric"
-            />
-          </View>
-          <TouchableOpacity
-            style={styles.addButton}
-            onPress={addQuestion}
-            activeOpacity={0.8}>
-            <LinearGradient
-              colors={[ThemeColors.orange, '#FF8C5A']}
-              start={{ x: 0, y: 0 }}
-              end={{ x: 1, y: 1 }}
-              style={styles.addButtonGradient}>
-              <IconSymbol name="plus.circle.fill" size={20} color={ThemeColors.white} />
-              <ThemedText style={{ color: ThemeColors.white, fontWeight: '700', marginLeft: 8 }}>Add Question</ThemedText>
-            </LinearGradient>
-          </TouchableOpacity>
-          </LinearGradient>
-        </ThemedView>
-
-        {questions.length > 0 && (
-          <ThemedView style={[styles.formCard, { backgroundColor: colors.card }]}>
-            <LinearGradient
-              colors={[ThemeColors.orange + '15', ThemeColors.deepBlue + '10']}
-              start={{ x: 0, y: 0 }}
-              end={{ x: 1, y: 1 }}
-              style={styles.formGradient}>
-              <View style={styles.sectionHeader}>
-                <View style={styles.sectionIconWrapper}>
-                  <View style={[styles.sectionIconContainer, { backgroundColor: ThemeColors.orange + '25' }]}>
-                    <LinearGradient
-                      colors={[ThemeColors.orange, '#FF8C5A']}
-                      start={{ x: 0, y: 0 }}
-                      end={{ x: 1, y: 1 }}
-                      style={styles.sectionIconGradient}>
-                      <IconSymbol name="list.bullet.rectangle.fill" size={24} color={ThemeColors.white} />
-                    </LinearGradient>
-                  </View>
-                </View>
-                <ThemedText type="subtitle" style={styles.sectionTitle}>
-                  Questions Preview ({questions.length})
-                </ThemedText>
-              </View>
               {questions.map((q, index) => (
                 <View key={q.id} style={styles.questionPreview}>
                   <LinearGradient
-                    colors={[ThemeColors.lightNeutral, ThemeColors.lightNeutral + 'DD']}
+                    colors={[colors.card + '80', colors.card]}
                     start={{ x: 0, y: 0 }}
                     end={{ x: 1, y: 1 }}
-                    style={styles.previewGradient}>
+                    style={styles.previewGradient}
+                  >
                     <View style={styles.previewHeader}>
-                      <View style={[styles.previewNumberBadge, { backgroundColor: ThemeColors.orange + '25' }]}>
+                      <View style={styles.previewNumberBadge}>
                         <LinearGradient
                           colors={[ThemeColors.orange, '#FF8C5A']}
                           start={{ x: 0, y: 0 }}
                           end={{ x: 1, y: 1 }}
-                          style={styles.previewNumberGradient}>
+                          style={styles.previewNumberGradient}
+                        >
                           <ThemedText style={styles.previewNumber}>Q{index + 1}</ThemedText>
                         </LinearGradient>
                       </View>
-                      <View style={[styles.previewMarksBadge, { backgroundColor: ThemeColors.deepBlue + '20' }]}>
+                      <View style={[styles.previewMarksBadge, { backgroundColor: ThemeColors.deepBlue + '15' }]}>
                         <IconSymbol name="star.fill" size={12} color={ThemeColors.deepBlue} />
-                        <ThemedText style={styles.previewMarks}>{q.marks} pts</ThemedText>
+                        <ThemedText style={[styles.previewMarks, { color: ThemeColors.deepBlue }]}>
+                          {q.marks} {q.marks === 1 ? 'point' : 'points'}
+                        </ThemedText>
                       </View>
                     </View>
-                    <ThemedText style={styles.previewQuestion}>{q.question}</ThemedText>
+
+                    <ThemedText style={styles.previewQuestionText}>
+                      {q.question}
+                    </ThemedText>
+
                     <View style={styles.previewOptions}>
                       {q.options.map((opt, i) => (
-                        <View key={i} style={[
-                          styles.previewOption,
-                          i === q.correctAnswer && styles.previewOptionCorrect
-                        ]}>
+                        <View 
+                          key={i} 
+                          style={[
+                            styles.previewOption,
+                            i === q.correctAnswer && styles.previewOptionCorrect
+                          ]}
+                        >
                           <View style={[
                             styles.previewOptionCircle,
-                            i === q.correctAnswer && { backgroundColor: '#4CAF50' }
+                            i === q.correctAnswer && styles.previewOptionCircleCorrect
                           ]}>
-                            {i === q.correctAnswer && (
-                              <IconSymbol name="checkmark" size={10} color={ThemeColors.white} />
-                            )}
+                            <ThemedText style={[
+                              styles.previewOptionLetter,
+                              i === q.correctAnswer && styles.previewOptionLetterCorrect
+                            ]}>
+                              {String.fromCharCode(65 + i)}
+                            </ThemedText>
                           </View>
                           <ThemedText style={[
                             styles.previewOptionText,
                             i === q.correctAnswer && styles.previewOptionTextCorrect
                           ]}>
-                            {String.fromCharCode(65 + i)}. {opt}
+                            {opt}
                           </ThemedText>
+                          {i === q.correctAnswer && (
+                            <View style={styles.correctBadge}>
+                              <IconSymbol name="checkmark.circle.fill" size={16} color="#4CAF50" />
+                            </View>
+                          )}
                         </View>
                       ))}
                     </View>
@@ -295,19 +364,27 @@ export default function ExamCreateScreen() {
           </ThemedView>
         )}
 
+        {/* Save Button */}
         <TouchableOpacity
           style={styles.saveButton}
           onPress={saveExam}
-          activeOpacity={0.8}>
+          activeOpacity={0.8}
+        >
           <LinearGradient
-            colors={[ThemeColors.deepBlue, '#0A2E3D']}
+            colors={[ThemeColors.deepBlue, '#1A3A4A']}
             start={{ x: 0, y: 0 }}
             end={{ x: 1, y: 1 }}
-            style={styles.saveButtonGradient}>
-            <IconSymbol name="checkmark.circle.fill" size={24} color={ThemeColors.white} />
-            <ThemedText style={{ color: ThemeColors.white, fontSize: 18, fontWeight: '800', marginLeft: 10 }}>
-              Save Exam
-            </ThemedText>
+            style={styles.saveButtonGradient}
+          >
+            <IconSymbol name="checkmark.circle.fill" size={28} color={ThemeColors.white} />
+            <View style={styles.saveButtonTextContainer}>
+              <ThemedText style={styles.saveButtonText}>
+                Save Exam
+              </ThemedText>
+              <ThemedText style={styles.saveButtonSubtext}>
+                {questions.length} {questions.length === 1 ? 'question' : 'questions'} • {duration || '0'} minutes
+              </ThemedText>
+            </View>
           </LinearGradient>
         </TouchableOpacity>
       </ScrollView>
@@ -327,18 +404,18 @@ const styles = StyleSheet.create({
     paddingBottom: 40,
   },
   formCard: {
-    borderRadius: 24,
+    borderRadius: 28,
     marginBottom: 24,
     overflow: 'hidden',
     ...Platform.select({
       ios: {
         shadowColor: '#000',
-        shadowOffset: { width: 0, height: 8 },
-        shadowOpacity: 0.15,
-        shadowRadius: 16,
+        shadowOffset: { width: 0, height: 4 },
+        shadowOpacity: 0.1,
+        shadowRadius: 12,
       },
       android: {
-        elevation: 8,
+        elevation: 4,
       },
     }),
   },
@@ -348,30 +425,23 @@ const styles = StyleSheet.create({
   sectionHeader: {
     flexDirection: 'row',
     alignItems: 'center',
-    marginBottom: 28,
+    marginBottom: 24,
     gap: 16,
   },
   sectionIconWrapper: {
-    position: 'relative',
-  },
-  sectionIconContainer: {
     width: 56,
     height: 56,
     borderRadius: 18,
-    justifyContent: 'center',
-    alignItems: 'center',
     overflow: 'hidden',
-    borderWidth: 2,
-    borderColor: ThemeColors.white + '30',
     ...Platform.select({
       ios: {
         shadowColor: ThemeColors.orange,
         shadowOffset: { width: 0, height: 4 },
-        shadowOpacity: 0.3,
+        shadowOpacity: 0.2,
         shadowRadius: 8,
       },
       android: {
-        elevation: 6,
+        elevation: 4,
       },
     }),
   },
@@ -382,97 +452,69 @@ const styles = StyleSheet.create({
     alignItems: 'center',
   },
   sectionTitle: {
-    fontWeight: '900',
-    fontSize: 24,
-    letterSpacing: 0.5,
-    flex: 1,
+    fontSize: 22,
+    fontWeight: '800',
+    letterSpacing: -0.5,
+    marginBottom: 4,
+  },
+  sectionSubtitle: {
+    fontSize: 14,
+    opacity: 0.7,
+  },
+  inputGroup: {
+    marginBottom: 20,
+  },
+  inputLabel: {
+    fontSize: 15,
+    fontWeight: '600',
+    marginBottom: 8,
+    marginLeft: 4,
   },
   inputContainer: {
     flexDirection: 'row',
     alignItems: 'center',
-    marginBottom: 16,
     gap: 12,
   },
   inputIconContainer: {
-    width: 44,
-    height: 44,
-    borderRadius: 12,
+    width: 48,
+    height: 48,
+    borderRadius: 14,
     justifyContent: 'center',
     alignItems: 'center',
   },
   input: {
     flex: 1,
-    borderWidth: 2,
-    borderRadius: 14,
+    borderWidth: 1.5,
+    borderRadius: 16,
     padding: 16,
     fontSize: 16,
-    fontWeight: '600',
-    ...Platform.select({
-      ios: {
-        shadowColor: '#000',
-        shadowOffset: { width: 0, height: 2 },
-        shadowOpacity: 0.05,
-        shadowRadius: 4,
-      },
-      android: {
-        elevation: 2,
-      },
-    }),
+    fontWeight: '500',
   },
   textAreaContainer: {
-    flexDirection: 'row',
-    alignItems: 'flex-start',
-    marginBottom: 16,
-    gap: 12,
-  },
-  textAreaIconContainer: {
-    width: 44,
-    height: 44,
-    borderRadius: 12,
-    justifyContent: 'center',
-    alignItems: 'center',
-    marginTop: 2,
+    marginBottom: 8,
   },
   textArea: {
-    flex: 1,
-    borderWidth: 2,
-    borderRadius: 14,
-    padding: 16,
+    borderWidth: 1.5,
+    borderRadius: 18,
+    padding: 18,
     fontSize: 16,
     minHeight: 120,
-    textAlignVertical: 'top',
-    fontWeight: '600',
-    ...Platform.select({
-      ios: {
-        shadowColor: '#000',
-        shadowOffset: { width: 0, height: 2 },
-        shadowOpacity: 0.05,
-        shadowRadius: 4,
-      },
-      android: {
-        elevation: 2,
-      },
-    }),
+    fontWeight: '500',
+    lineHeight: 24,
   },
   optionRow: {
     flexDirection: 'row',
     alignItems: 'center',
-    marginBottom: 14,
+    marginBottom: 12,
   },
   radioButton: {
-    width: 28,
-    height: 28,
-    borderRadius: 14,
-    borderWidth: 2.5,
-    marginRight: 14,
+    width: 32,
+    height: 32,
+    borderRadius: 16,
+    borderWidth: 2,
+    marginRight: 12,
     justifyContent: 'center',
     alignItems: 'center',
-  },
-  radioInner: {
-    width: 14,
-    height: 14,
-    borderRadius: 7,
-    backgroundColor: ThemeColors.white,
   },
   optionInputContainer: {
     flex: 1,
@@ -489,80 +531,73 @@ const styles = StyleSheet.create({
   },
   optionLabelText: {
     fontSize: 16,
-    fontWeight: '800',
+    fontWeight: '700',
     color: ThemeColors.orange,
   },
   optionInput: {
     flex: 1,
-    borderWidth: 2,
-    borderRadius: 14,
+    borderWidth: 1.5,
+    borderRadius: 16,
     padding: 14,
-    fontSize: 16,
-    fontWeight: '600',
-    ...Platform.select({
-      ios: {
-        shadowColor: '#000',
-        shadowOffset: { width: 0, height: 2 },
-        shadowOpacity: 0.05,
-        shadowRadius: 4,
-      },
-      android: {
-        elevation: 2,
-      },
-    }),
+    fontSize: 15,
+    fontWeight: '500',
+  },
+  marksContainer: {
+    marginBottom: 20,
   },
   marksRow: {
     flexDirection: 'row',
     alignItems: 'center',
-    marginBottom: 14,
+    gap: 12,
   },
   marksInput: {
-    width: 70,
+    width: 80,
     borderWidth: 1.5,
-    borderRadius: 12,
-    padding: 12,
-    marginLeft: 14,
+    borderRadius: 14,
+    padding: 14,
     fontSize: 16,
     fontWeight: '600',
     textAlign: 'center',
   },
+  marksHint: {
+    fontSize: 14,
+    opacity: 0.7,
+  },
   addButton: {
-    borderRadius: 16,
+    borderRadius: 20,
     overflow: 'hidden',
     marginTop: 8,
     ...Platform.select({
       ios: {
         shadowColor: ThemeColors.orange,
         shadowOffset: { width: 0, height: 4 },
-        shadowOpacity: 0.4,
-        shadowRadius: 8,
-      },
-      android: {
-        elevation: 6,
-      },
-    }),
-  },
-  addButtonGradient: {
-    padding: 16,
-    flexDirection: 'row',
-    alignItems: 'center',
-    justifyContent: 'center',
-  },
-  questionPreview: {
-    marginBottom: 16,
-    borderRadius: 18,
-    overflow: 'hidden',
-    ...Platform.select({
-      ios: {
-        shadowColor: '#000',
-        shadowOffset: { width: 0, height: 4 },
-        shadowOpacity: 0.1,
+        shadowOpacity: 0.3,
         shadowRadius: 8,
       },
       android: {
         elevation: 4,
       },
     }),
+  },
+  addButtonGradient: {
+    padding: 18,
+    flexDirection: 'row',
+    alignItems: 'center',
+    justifyContent: 'center',
+    gap: 8,
+  },
+  addButtonText: {
+    color: ThemeColors.white,
+    fontSize: 16,
+    fontWeight: '700',
+    letterSpacing: 0.5,
+  },
+  questionPreview: {
+    marginBottom: 16,
+    borderRadius: 20,
+    overflow: 'hidden',
+    borderWidth: 1,
+    borderColor: 'rgba(0,0,0,0.05)',
   },
   previewGradient: {
     padding: 20,
@@ -578,14 +613,13 @@ const styles = StyleSheet.create({
     overflow: 'hidden',
   },
   previewNumberGradient: {
-    paddingHorizontal: 14,
-    paddingVertical: 6,
+    paddingHorizontal: 16,
+    paddingVertical: 8,
   },
   previewNumber: {
     color: ThemeColors.white,
     fontSize: 14,
     fontWeight: '800',
-    letterSpacing: 0.5,
   },
   previewMarksBadge: {
     flexDirection: 'row',
@@ -596,14 +630,13 @@ const styles = StyleSheet.create({
     gap: 6,
   },
   previewMarks: {
-    fontSize: 12,
-    fontWeight: '700',
-    color: ThemeColors.deepBlue,
+    fontSize: 13,
+    fontWeight: '600',
   },
-  previewQuestion: {
-    fontWeight: '700',
-    marginBottom: 16,
+  previewQuestionText: {
     fontSize: 16,
+    fontWeight: '600',
+    marginBottom: 18,
     lineHeight: 24,
   },
   previewOptions: {
@@ -612,56 +645,88 @@ const styles = StyleSheet.create({
   previewOption: {
     flexDirection: 'row',
     alignItems: 'center',
-    padding: 12,
-    borderRadius: 12,
-    backgroundColor: ThemeColors.lightNeutral + '80',
+    padding: 14,
+    borderRadius: 16,
+    backgroundColor: 'rgba(0,0,0,0.02)',
     gap: 12,
+    borderWidth: 1,
+    borderColor: 'rgba(0,0,0,0.05)',
   },
   previewOptionCorrect: {
-    backgroundColor: '#4CAF5020',
-    borderWidth: 2,
+    backgroundColor: '#4CAF5010',
     borderColor: '#4CAF50',
+    borderWidth: 1.5,
   },
   previewOptionCircle: {
-    width: 24,
-    height: 24,
-    borderRadius: 12,
-    backgroundColor: ThemeColors.grayText + '30',
+    width: 28,
+    height: 28,
+    borderRadius: 14,
+    backgroundColor: 'rgba(0,0,0,0.1)',
     justifyContent: 'center',
     alignItems: 'center',
   },
-  previewOptionText: {
-    flex: 1,
+  previewOptionCircleCorrect: {
+    backgroundColor: '#4CAF50',
+  },
+  previewOptionLetter: {
     fontSize: 14,
     fontWeight: '600',
-    lineHeight: 20,
+    opacity: 0.7,
+  },
+  previewOptionLetterCorrect: {
+    color: ThemeColors.white,
+    opacity: 1,
+  },
+  previewOptionText: {
+    flex: 1,
+    fontSize: 15,
+    fontWeight: '500',
+    lineHeight: 22,
   },
   previewOptionTextCorrect: {
     color: '#4CAF50',
-    fontWeight: '700',
+    fontWeight: '600',
+  },
+  correctBadge: {
+    marginLeft: 'auto',
   },
   saveButton: {
-    borderRadius: 20,
+    borderRadius: 24,
     overflow: 'hidden',
-    marginBottom: 40,
     marginTop: 8,
     ...Platform.select({
       ios: {
         shadowColor: ThemeColors.deepBlue,
         shadowOffset: { width: 0, height: 6 },
-        shadowOpacity: 0.4,
+        shadowOpacity: 0.3,
         shadowRadius: 12,
       },
       android: {
-        elevation: 10,
+        elevation: 6,
       },
     }),
   },
   saveButtonGradient: {
-    padding: 20,
+    padding: 22,
     flexDirection: 'row',
     alignItems: 'center',
     justifyContent: 'center',
+    gap: 16,
+  },
+  saveButtonTextContainer: {
+    alignItems: 'flex-start',
+  },
+  saveButtonText: {
+    color: ThemeColors.white,
+    fontSize: 18,
+    fontWeight: '800',
+    letterSpacing: 0.5,
+    marginBottom: 4,
+  },
+  saveButtonSubtext: {
+    color: ThemeColors.white,
+    fontSize: 13,
+    opacity: 0.8,
+    fontWeight: '500',
   },
 });
-

@@ -14,6 +14,9 @@ import { ActivityIndicator, Platform, ScrollView, StyleSheet, TextInput, Touchab
 import { VideoSkeleton } from '@/components/skeleton';
 import { detectNetworkSpeed, getMinLoadingTime } from '@/utils/network';
 import { useAuth } from '@/contexts/AuthContext';
+import Animated, { FadeInDown, FadeInUp } from 'react-native-reanimated';
+
+const SUBJECTS = ['Mathematics', 'Physics', 'Chemistry', 'Biology'];
 
 export default function VideosScreen() {
   const colorScheme = useColorScheme();
@@ -23,7 +26,9 @@ export default function VideosScreen() {
   const [videos, setVideos] = useState<Video[]>([]);
   const [searchQuery, setSearchQuery] = useState('');
   const [loading, setLoading] = useState(true);
-  
+  const [selectedSubject, setSelectedSubject] = useState<string | null>(null);
+  const [isSearchFocused, setIsSearchFocused] = useState(false);
+
   const fromExplore = params.from === 'explore';
 
   // Get user's standard from class field
@@ -37,24 +42,24 @@ export default function VideosScreen() {
     try {
       setLoading(true);
       let minLoadingTime = 300; // Default minimum loading time
-      
+
       try {
         const networkSpeed = await detectNetworkSpeed();
         minLoadingTime = getMinLoadingTime(networkSpeed);
       } catch (networkError) {
         console.warn('Network speed detection failed, using default:', networkError);
       }
-      
+
       const startTime = Date.now();
       // Filter videos by user's standard if available
       const loadedVideos = await getVideos(userStandard);
       const elapsedTime = Date.now() - startTime;
-      
+
       // Ensure minimum loading time for better UX
       if (elapsedTime < minLoadingTime) {
         await new Promise(resolve => setTimeout(resolve, minLoadingTime - elapsedTime));
       }
-      
+
       setVideos(loadedVideos);
     } catch (error: any) {
       console.error('Failed to load videos:', error);
@@ -64,9 +69,20 @@ export default function VideosScreen() {
     }
   };
 
-  const filteredVideos = videos.filter(video =>
-    video.title.toLowerCase().includes(searchQuery.toLowerCase())
-  );
+  const filteredVideos = videos.filter(video => {
+    const matchesSearch = video.title.toLowerCase().includes(searchQuery.toLowerCase());
+    const matchesSubject = !selectedSubject || video.subject === selectedSubject;
+    return matchesSearch && matchesSubject;
+  });
+
+  // Group videos by subject
+  const videosBySubject = SUBJECTS.reduce((acc, subject) => {
+    const subjectVideos = videos.filter(v => v.subject === subject);
+    if (subjectVideos.length > 0) {
+      acc[subject] = subjectVideos;
+    }
+    return acc;
+  }, {} as Record<string, Video[]>);
 
   const colors = Colors[colorScheme ?? 'light'];
 
@@ -78,106 +94,226 @@ export default function VideosScreen() {
         onBackPress={fromExplore ? () => router.push('/explore') : undefined}
       />
 
-      <ScrollView 
+      <ScrollView
         style={styles.videoList}
         contentContainerStyle={styles.videoListContent}
         showsVerticalScrollIndicator={false}>
-        
-        <ThemedView style={[styles.welcomeCard, { backgroundColor: colors.card }]}>
-          <LinearGradient
-            colors={[ThemeColors.orange + '20', ThemeColors.deepBlue + '20']}
-            start={{ x: 0, y: 0 }}
-            end={{ x: 1, y: 1 }}
-            style={styles.welcomeGradient}>
-            <View style={styles.welcomeContent}>
-              <View style={[styles.welcomeIconContainer, { backgroundColor: ThemeColors.orange + '30' }]}>
-                <IconSymbol name="play.rectangle.fill" size={40} color={ThemeColors.orange} />
-              </View>
-              <ThemedText type="title" style={styles.welcomeTitle}>
-                Video Lectures
-              </ThemedText>
-              <ThemedText style={styles.welcomeDescription}>
-                Watch educational videos from YouTube to enhance your IIT preparation
-              </ThemedText>
-            </View>
-          </LinearGradient>
-        </ThemedView>
 
-        <View style={[styles.searchContainer, { backgroundColor: colors.card }]}>
-          <IconSymbol name="magnifyingglass" size={20} color={colors.icon} />
-          <TextInput
-            style={[styles.searchInput, { color: colors.text }]}
-            placeholder="Search videos..."
-            placeholderTextColor={colors.icon}
-            value={searchQuery}
-            onChangeText={setSearchQuery}
-          />
-        </View>
+        <Animated.View entering={FadeInUp.duration(600).springify()}>
+          <ThemedView style={[styles.welcomeCard, { backgroundColor: colors.card }]}>
+            <LinearGradient
+              colors={[ThemeColors.orange + '15', ThemeColors.deepBlue + '10']}
+              start={{ x: 0, y: 0 }}
+              end={{ x: 1, y: 1 }}
+              style={styles.welcomeGradient}>
+              <View style={styles.welcomeContent}>
+                <View style={[styles.welcomeIconContainer, { backgroundColor: ThemeColors.orange + '20' }]}>
+                  <LinearGradient
+                    colors={[ThemeColors.orange, ThemeColors.deepBlue]}
+                    start={{ x: 0, y: 0 }}
+                    end={{ x: 1, y: 1 }}
+                    style={styles.iconGradient}>
+                    <IconSymbol name="play.rectangle.fill" size={36} color={ThemeColors.white} />
+                  </LinearGradient>
+                </View>
+                <ThemedText type="title" style={styles.welcomeTitle}>
+                  Video Lectures
+                </ThemedText>
+                <ThemedText style={styles.welcomeDescription}>
+                  Master IIT concepts with our curated video lectures from top educators
+                </ThemedText>
+              </View>
+            </LinearGradient>
+          </ThemedView>
+        </Animated.View>
+
+        <Animated.View entering={FadeInDown.duration(600).delay(100).springify()}>
+          <View style={[styles.searchContainer, {
+            backgroundColor: colors.card,
+            borderColor: isSearchFocused ? ThemeColors.orange + '40' : 'transparent',
+            borderWidth: isSearchFocused ? 2 : 0,
+          }]}>
+            <IconSymbol name="magnifyingglass" size={20} color={ThemeColors.orange} />
+            <TextInput
+              style={[styles.searchInput, { color: colors.text }]}
+              placeholder="Search for videos..."
+              placeholderTextColor={colors.icon + '80'}
+              value={searchQuery}
+              onChangeText={setSearchQuery}
+              onFocus={() => setIsSearchFocused(true)}
+              onBlur={() => setIsSearchFocused(false)}
+            />
+            {searchQuery.length > 0 && (
+              <TouchableOpacity onPress={() => setSearchQuery('')} style={styles.clearButton}>
+                <IconSymbol name="xmark.circle.fill" size={18} color={colors.icon} />
+              </TouchableOpacity>
+            )}
+          </View>
+        </Animated.View>
+
+        {selectedSubject && (
+          <Animated.View entering={FadeInDown.duration(400)}>
+            <TouchableOpacity
+              style={[styles.backButton, { backgroundColor: colors.card }]}
+              onPress={() => setSelectedSubject(null)}
+              activeOpacity={0.7}>
+              <View style={[styles.backIconContainer, { backgroundColor: ThemeColors.orange + '15' }]}>
+                <IconSymbol name="chevron.left" size={16} color={ThemeColors.orange} />
+              </View>
+              <ThemedText style={styles.backButtonText}>Back to Subjects</ThemedText>
+              <ThemedText style={styles.currentSubjectText}>{selectedSubject}</ThemedText>
+            </TouchableOpacity>
+          </Animated.View>
+        )}
+
         {loading ? (
           <View style={styles.skeletonContainer}>
             <VideoSkeleton count={6} />
           </View>
-        ) : filteredVideos.length === 0 ? (
-          <ThemedView style={styles.emptyContainer}>
-            <View style={[styles.emptyIconContainer, { backgroundColor: ThemeColors.orange + '20' }]}>
-              <IconSymbol name="play.rectangle.fill" size={64} color={ThemeColors.orange} />
-            </View>
-            <ThemedText style={styles.emptyText}>No videos available</ThemedText>
-            <ThemedText style={styles.emptySubtext}>Videos will appear here when added by admin</ThemedText>
-          </ThemedView>
-        ) : (
-          <View style={styles.videoGrid}>
-            {filteredVideos.map(video => (
-              <Link
-                key={video._id || video.id}
-                href={{
-                  pathname: '/video-player',
-                  params: { 
-                    videoId: video._id || video.id || '', 
-                    title: video.title, 
-                    url: video.youtubeUrl,
-                    ...(fromExplore && { from: 'explore' }),
-                  },
-                }}
-                asChild>
-                <TouchableOpacity
-                  style={[styles.videoCard, { backgroundColor: colors.card }]}
-                  activeOpacity={0.85}>
-                  <View style={styles.thumbnailContainer}>
-                    <Image
-                      source={{ uri: getYouTubeThumbnail(video.youtubeUrl) }}
-                      style={styles.thumbnail}
-                      contentFit="cover"
-                      placeholder={{ blurhash: 'L6PZfSi_.AyE_3t7t7R**0o#DgR4' }}
-                      transition={200}
-                    />
-                    <View style={styles.playOverlay}>
-                      <View style={styles.playIconContainer}>
-                        <IconSymbol name="play.fill" size={24} color={ThemeColors.white} />
+        ) : selectedSubject ? (
+          // Show videos for selected subject
+          filteredVideos.length === 0 ? (
+            <Animated.View entering={FadeInUp.duration(600)} style={styles.emptyContainer}>
+              <View style={[styles.emptyIconContainer, { backgroundColor: ThemeColors.orange + '10' }]}>
+                <LinearGradient
+                  colors={[ThemeColors.orange + '80', ThemeColors.deepBlue + '80']}
+                  style={styles.emptyGradient}>
+                  <IconSymbol name="play.slash" size={48} color={ThemeColors.white} />
+                </LinearGradient>
+              </View>
+              <ThemedText style={styles.emptyText}>No videos found</ThemedText>
+              <ThemedText style={styles.emptySubtext}>Check back later for new content</ThemedText>
+            </Animated.View>
+          ) : (
+            <View style={styles.videoGrid}>
+              {filteredVideos.map((video, index) => (
+                <Animated.View
+                  key={video._id || video.id}
+                  entering={FadeInDown.duration(400).delay(index * 100).springify()}>
+                  <Link
+                    href={{
+                      pathname: '/video-player',
+                      params: {
+                        videoId: video._id || video.id || '',
+                        title: video.title,
+                        url: video.youtubeUrl,
+                        ...(fromExplore && { from: 'explore' }),
+                      },
+                    }}
+                    asChild>
+                    <TouchableOpacity
+                      style={[styles.videoCard, { backgroundColor: colors.card }]}
+                      activeOpacity={0.85}>
+                      <View style={styles.thumbnailContainer}>
+                        <Image
+                          source={{ uri: getYouTubeThumbnail(video.youtubeUrl) }}
+                          style={styles.thumbnail}
+                          contentFit="cover"
+                          placeholder={{ blurhash: 'L6PZfSi_.AyE_3t7t7R**0o#DgR4' }}
+                          transition={200}
+                        />
+                        <LinearGradient
+                          colors={['transparent', 'rgba(0,0,0,0.3)']}
+                          style={styles.thumbnailGradient}
+                        />
+                        <View style={styles.playOverlay}>
+                          <View style={styles.playIconContainer}>
+                            <LinearGradient
+                              colors={[ThemeColors.orange, ThemeColors.deepBlue]}
+                              start={{ x: 0, y: 0 }}
+                              end={{ x: 1, y: 1 }}
+                              style={styles.playIconGradient}>
+                              <IconSymbol name="play.fill" size={20} color={ThemeColors.white} />
+                            </LinearGradient>
+                          </View>
+                        </View>
+                        <View style={styles.durationBadge}>
+                          <IconSymbol name="clock" size={10} color={ThemeColors.white} />
+                          <ThemedText style={styles.durationText}>12:34</ThemedText>
+                        </View>
                       </View>
-                    </View>
-                    <View style={styles.videoBadge}>
-                      <IconSymbol name="play.rectangle.fill" size={10} color={ThemeColors.white} />
-                    </View>
-                  </View>
-                  <View style={styles.videoInfo}>
-                    <ThemedText type="defaultSemiBold" numberOfLines={2} style={styles.videoTitle}>
-                      {video.title}
-                    </ThemedText>
-                    {video.description ? (
-                      <ThemedText style={styles.description} numberOfLines={2}>
-                        {video.description}
-                      </ThemedText>
-                    ) : (
-                      <ThemedText style={styles.descriptionPlaceholder} numberOfLines={2}>
-                        Educational video lecture for IIT preparation
-                      </ThemedText>
-                    )}
-                  </View>
-                </TouchableOpacity>
-              </Link>
-            ))}
-          </View>
+                      <View style={styles.videoInfo}>
+                        <View style={styles.subjectTag}>
+                          <View style={[styles.subjectDot, { backgroundColor: ThemeColors.orange }]} />
+                          <ThemedText style={styles.subjectTagText}>{video.subject}</ThemedText>
+                        </View>
+                        <ThemedText type="defaultSemiBold" numberOfLines={2} style={styles.videoTitle}>
+                          {video.title}
+                        </ThemedText>
+                        {video.description ? (
+                          <ThemedText style={styles.description} numberOfLines={2}>
+                            {video.description}
+                          </ThemedText>
+                        ) : null}
+                        <View style={styles.videoMeta}>
+                          <IconSymbol name="eye" size={12} color={colors.icon} />
+                          <ThemedText style={styles.viewCount}>1.2k views</ThemedText>
+                        </View>
+                      </View>
+                    </TouchableOpacity>
+                  </Link>
+                </Animated.View>
+              ))}
+            </View>
+          )
+        ) : (
+          // Show subject folders
+          Object.keys(videosBySubject).length === 0 ? (
+            <Animated.View entering={FadeInUp.duration(600)} style={styles.emptyContainer}>
+              <View style={[styles.emptyIconContainer, { backgroundColor: ThemeColors.orange + '10' }]}>
+                <LinearGradient
+                  colors={[ThemeColors.orange + '80', ThemeColors.deepBlue + '80']}
+                  style={styles.emptyGradient}>
+                  <IconSymbol name="rectangle.stack" size={48} color={ThemeColors.white} />
+                </LinearGradient>
+              </View>
+              <ThemedText style={styles.emptyText}>No videos available</ThemedText>
+              <ThemedText style={styles.emptySubtext}>Content is being prepared for you</ThemedText>
+            </Animated.View>
+          ) : (
+            <View style={styles.subjectGrid}>
+              {SUBJECTS.map((subject, index) => {
+                const subjectVideos = videosBySubject[subject] || [];
+                if (subjectVideos.length === 0) return null;
+                return (
+                  <Animated.View
+                    key={subject}
+                    entering={FadeInDown.duration(400).delay(index * 100).springify()}
+                    style={{ width: '47%' }}>
+                    <TouchableOpacity
+                      style={[styles.subjectCard, { backgroundColor: colors.card }]}
+                      onPress={() => setSelectedSubject(subject)}
+                      activeOpacity={0.85}>
+                      <LinearGradient
+                        colors={[ThemeColors.orange + '08', ThemeColors.deepBlue + '05']}
+                        start={{ x: 0, y: 0 }}
+                        end={{ x: 1, y: 1 }}
+                        style={styles.subjectGradient}>
+                        <View style={[styles.subjectIconContainer, { backgroundColor: ThemeColors.orange + '15' }]}>
+                          <LinearGradient
+                            colors={[ThemeColors.orange, ThemeColors.deepBlue]}
+                            start={{ x: 0, y: 0 }}
+                            end={{ x: 1, y: 1 }}
+                            style={styles.subjectIconGradient}>
+                            <IconSymbol name="book.closed.fill" size={28} color={ThemeColors.white} />
+                          </LinearGradient>
+                        </View>
+                        <ThemedText type="defaultSemiBold" style={styles.subjectTitle}>
+                          {subject}
+                        </ThemedText>
+                        <View style={styles.subjectCountContainer}>
+                          <ThemedText style={styles.subjectCount}>
+                            {subjectVideos.length} {subjectVideos.length === 1 ? 'Lesson' : 'Lessons'}
+                          </ThemedText>
+                          <IconSymbol name="chevron.right" size={12} color={ThemeColors.orange} />
+                        </View>
+                      </LinearGradient>
+                    </TouchableOpacity>
+                  </Animated.View>
+                );
+              })}
+            </View>
+          )
         )}
       </ScrollView>
     </ThemedView>
@@ -203,6 +339,10 @@ const styles = StyleSheet.create({
     flex: 1,
     fontSize: 16,
     fontWeight: '500',
+    paddingVertical: 12,
+  },
+  clearButton: {
+    padding: 8,
   },
   videoList: {
     flex: 1,
@@ -212,15 +352,15 @@ const styles = StyleSheet.create({
     paddingBottom: 120,
   },
   welcomeCard: {
-    borderRadius: 24,
+    borderRadius: 28,
     marginBottom: 24,
     overflow: 'hidden',
     ...Platform.select({
       ios: {
         shadowColor: '#000',
-        shadowOffset: { width: 0, height: 8 },
-        shadowOpacity: 0.15,
-        shadowRadius: 16,
+        shadowOffset: { width: 0, height: 10 },
+        shadowOpacity: 0.1,
+        shadowRadius: 20,
       },
       android: {
         elevation: 8,
@@ -228,48 +368,58 @@ const styles = StyleSheet.create({
     }),
   },
   welcomeGradient: {
-    padding: 28,
+    padding: 32,
   },
   welcomeContent: {
     alignItems: 'center',
   },
   welcomeIconContainer: {
-    width: 80,
-    height: 80,
-    borderRadius: 20,
+    width: 72,
+    height: 72,
+    borderRadius: 24,
     justifyContent: 'center',
     alignItems: 'center',
-    marginBottom: 16,
+    marginBottom: 20,
+    overflow: 'hidden',
+  },
+  iconGradient: {
+    width: '100%',
+    height: '100%',
+    justifyContent: 'center',
+    alignItems: 'center',
   },
   welcomeTitle: {
-    fontSize: 26,
+    fontSize: 28,
     fontWeight: '800',
-    marginBottom: 8,
+    marginBottom: 12,
     textAlign: 'center',
+    letterSpacing: -0.5,
   },
   welcomeDescription: {
     fontSize: 15,
-    opacity: 0.9,
+    opacity: 0.8,
     textAlign: 'center',
     lineHeight: 22,
     fontWeight: '500',
+    maxWidth: '80%',
   },
   searchContainer: {
     flexDirection: 'row',
     alignItems: 'center',
     marginBottom: 20,
-    padding: 16,
-    borderRadius: 16,
+    paddingHorizontal: 20,
+    paddingVertical: 4,
+    borderRadius: 24,
     gap: 12,
     ...Platform.select({
       ios: {
         shadowColor: '#000',
-        shadowOffset: { width: 0, height: 2 },
-        shadowOpacity: 0.08,
-        shadowRadius: 8,
+        shadowOffset: { width: 0, height: 4 },
+        shadowOpacity: 0.06,
+        shadowRadius: 12,
       },
       android: {
-        elevation: 3,
+        elevation: 4,
       },
     }),
   },
@@ -277,17 +427,19 @@ const styles = StyleSheet.create({
     flexDirection: 'row',
     flexWrap: 'wrap',
     gap: 16,
-    marginTop: 4,
+    marginTop: 8,
+    justifyContent: 'space-between',
   },
   videoCard: {
-    width: '47%',
-    borderRadius: 20,
+    width: '100%',
+    borderRadius: 24,
     overflow: 'hidden',
+    marginBottom: 4,
     ...Platform.select({
       ios: {
         shadowColor: '#000',
-        shadowOffset: { width: 0, height: 6 },
-        shadowOpacity: 0.12,
+        shadowOffset: { width: 0, height: 8 },
+        shadowOpacity: 0.1,
         shadowRadius: 16,
       },
       android: {
@@ -305,6 +457,13 @@ const styles = StyleSheet.create({
     width: '100%',
     height: '100%',
   },
+  thumbnailGradient: {
+    position: 'absolute',
+    bottom: 0,
+    left: 0,
+    right: 0,
+    height: '50%',
+  },
   playOverlay: {
     position: 'absolute',
     top: 0,
@@ -313,17 +472,12 @@ const styles = StyleSheet.create({
     bottom: 0,
     justifyContent: 'center',
     alignItems: 'center',
-    backgroundColor: 'rgba(0, 0, 0, 0.2)',
   },
   playIconContainer: {
-    width: 56,
-    height: 56,
-    borderRadius: 28,
-    backgroundColor: ThemeColors.orange + 'E6',
-    justifyContent: 'center',
-    alignItems: 'center',
-    borderWidth: 3,
-    borderColor: ThemeColors.white + '50',
+    width: 48,
+    height: 48,
+    borderRadius: 24,
+    overflow: 'hidden',
     ...Platform.select({
       ios: {
         shadowColor: '#000',
@@ -336,47 +490,87 @@ const styles = StyleSheet.create({
       },
     }),
   },
-  videoBadge: {
+  playIconGradient: {
+    width: '100%',
+    height: '100%',
+    justifyContent: 'center',
+    alignItems: 'center',
+  },
+  durationBadge: {
     position: 'absolute',
-    top: 8,
+    bottom: 8,
     right: 8,
-    backgroundColor: ThemeColors.deepBlue + 'E6',
-    paddingHorizontal: 6,
-    paddingVertical: 3,
-    borderRadius: 6,
+    backgroundColor: 'rgba(0,0,0,0.75)',
+    paddingHorizontal: 8,
+    paddingVertical: 4,
+    borderRadius: 12,
     flexDirection: 'row',
     alignItems: 'center',
-    gap: 3,
+    gap: 4,
+  },
+  durationText: {
+    color: ThemeColors.white,
+    fontSize: 11,
+    fontWeight: '600',
   },
   emptyIconContainer: {
     width: 120,
     height: 120,
-    borderRadius: 24,
+    borderRadius: 32,
+    justifyContent: 'center',
+    alignItems: 'center',
+    overflow: 'hidden',
+  },
+  emptyGradient: {
+    width: '100%',
+    height: '100%',
     justifyContent: 'center',
     alignItems: 'center',
   },
   videoInfo: {
-    padding: 14,
+    padding: 16,
+  },
+  subjectTag: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    marginBottom: 8,
+    gap: 6,
+  },
+  subjectDot: {
+    width: 8,
+    height: 8,
+    borderRadius: 4,
+  },
+  subjectTagText: {
+    fontSize: 12,
+    fontWeight: '600',
+    opacity: 0.7,
+    textTransform: 'uppercase',
+    letterSpacing: 0.5,
   },
   videoTitle: {
-    fontSize: 15,
+    fontSize: 16,
     fontWeight: '800',
-    lineHeight: 20,
-    letterSpacing: 0.2,
-    marginBottom: 6,
+    lineHeight: 22,
+    letterSpacing: -0.3,
+    marginBottom: 8,
   },
   description: {
-    fontSize: 12,
-    lineHeight: 16,
-    opacity: 0.8,
+    fontSize: 13,
+    lineHeight: 18,
+    opacity: 0.7,
     fontWeight: '500',
+    marginBottom: 12,
   },
-  descriptionPlaceholder: {
-    fontSize: 12,
-    lineHeight: 16,
-    opacity: 0.6,
-    fontStyle: 'italic',
-    fontWeight: '400',
+  videoMeta: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    gap: 6,
+  },
+  viewCount: {
+    fontSize: 11,
+    fontWeight: '500',
+    opacity: 0.5,
   },
   emptyContainer: {
     alignItems: 'center',
@@ -384,18 +578,116 @@ const styles = StyleSheet.create({
     paddingVertical: 80,
   },
   emptyText: {
-    fontSize: 20,
+    fontSize: 22,
     fontWeight: '700',
-    marginTop: 20,
+    marginTop: 24,
+    letterSpacing: -0.5,
   },
   emptySubtext: {
     fontSize: 15,
     marginTop: 8,
-    opacity: 0.7,
+    opacity: 0.6,
     fontWeight: '500',
   },
   skeletonContainer: {
-    paddingTop: 4,
+    paddingTop: 8,
+  },
+  backButton: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    padding: 16,
+    borderRadius: 24,
+    marginBottom: 20,
+    gap: 12,
+    ...Platform.select({
+      ios: {
+        shadowColor: '#000',
+        shadowOffset: { width: 0, height: 4 },
+        shadowOpacity: 0.06,
+        shadowRadius: 12,
+      },
+      android: {
+        elevation: 4,
+      },
+    }),
+  },
+  backIconContainer: {
+    width: 32,
+    height: 32,
+    borderRadius: 10,
+    justifyContent: 'center',
+    alignItems: 'center',
+  },
+  backButtonText: {
+    fontSize: 16,
+    fontWeight: '600',
+    flex: 1,
+  },
+  currentSubjectText: {
+    fontSize: 14,
+    fontWeight: '700',
+    opacity: 0.7,
+    color: ThemeColors.orange,
+  },
+  subjectGrid: {
+    flexDirection: 'row',
+    flexWrap: 'wrap',
+    gap: 16,
+    marginTop: 8,
+    justifyContent: 'space-between',
+  },
+  subjectCard: {
+    width: '100%',
+    borderRadius: 24,
+    overflow: 'hidden',
+    ...Platform.select({
+      ios: {
+        shadowColor: '#000',
+        shadowOffset: { width: 0, height: 6 },
+        shadowOpacity: 0.08,
+        shadowRadius: 14,
+      },
+      android: {
+        elevation: 5,
+      },
+    }),
+  },
+  subjectGradient: {
+    padding: 20,
+    alignItems: 'center',
+    minHeight: 160,
+    justifyContent: 'center',
+  },
+  subjectIconContainer: {
+    width: 64,
+    height: 64,
+    borderRadius: 20,
+    justifyContent: 'center',
+    alignItems: 'center',
+    marginBottom: 16,
+    overflow: 'hidden',
+  },
+  subjectIconGradient: {
+    width: '100%',
+    height: '100%',
+    justifyContent: 'center',
+    alignItems: 'center',
+  },
+  subjectTitle: {
+    fontSize: 16,
+    fontWeight: '800',
+    marginBottom: 8,
+    textAlign: 'center',
+    letterSpacing: -0.3,
+  },
+  subjectCountContainer: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    gap: 6,
+  },
+  subjectCount: {
+    fontSize: 13,
+    opacity: 0.6,
+    fontWeight: '600',
   },
 });
-

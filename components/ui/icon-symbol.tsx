@@ -72,6 +72,12 @@ const MAPPING = {
   'lock.shield.fill': 'security',
   'chevron.right': 'chevron-right',
   'hand.raised.fill': 'pan-tool',
+  'pencil': 'edit',
+  'pencil.fill': 'edit',
+  'pencil.circle.fill': 'edit',
+  'trash.fill': 'delete',
+  'number': 'looks-one',
+  'graduationcap.fill': 'school',
 } as IconMapping;
 
 /**

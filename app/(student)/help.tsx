@@ -71,7 +71,7 @@ export default function HelpScreen() {
       title: 'Contact Support',
       icon: 'envelope.fill',
       items: [
-        'Email: support@vishwas.com',
+        'Email: support@topscore.com',
         'Phone: +91-XXXXX-XXXXX',
         'Available: Mon-Fri, 9 AM - 6 PM',
       ],

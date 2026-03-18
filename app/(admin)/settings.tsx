@@ -137,7 +137,7 @@ export default function AdminSettingsScreen() {
           icon: 'info.circle.fill',
           type: 'action',
           onPress: () => {
-            Alert.alert('App Version', 'VISHWAS EDU TECH v1.0.0');
+            Alert.alert('App Version', 'topscore v1.0.0');
           },
         },
         {

@@ -41,12 +41,12 @@ export default function StudentAboutScreen() {
           <View style={styles.logoSection}>
             <View style={styles.logoContainer}>
               <Image
-                source={require('@/assets/images/viswasnav.png')}
+                source={require('@/assets/images/logo.png')}
                 style={styles.logo}
                 contentFit="contain"
               />
             </View>
-            <ThemedText style={styles.appName}>VISHWAS EDUTECH</ThemedText>
+            <ThemedText style={styles.appName}>topscore</ThemedText>
             <ThemedText style={styles.appTagline}>IIT FOUNDATION | MEDICAL</ThemedText>
             <ThemedText style={styles.version}>Version 1.0.0</ThemedText>
           </View>
@@ -54,7 +54,7 @@ export default function StudentAboutScreen() {
           {/* Description */}
           <View style={styles.section}>
             <ThemedText style={styles.description}>
-              VISHWAS EDUTECH is a comprehensive educational platform designed to help students excel
+              topscore is a comprehensive educational platform designed to help students excel
               in their IIT Foundation and Medical entrance exam preparation. Our platform provides
               access to video lectures, study materials, practice exams, and comprehensive learning
               resources.
@@ -67,9 +67,9 @@ export default function StudentAboutScreen() {
             
             <TouchableOpacity
               style={[styles.contactItem, isDark && styles.contactItemDark]}
-              onPress={() => Linking.openURL('mailto:support@viswas.com')}>
+              onPress={() => Linking.openURL('mailto:support@topscore.com')}>
               <IconSymbol name="envelope.fill" size={20} color={ThemeColors.orange} />
-              <ThemedText style={styles.contactText}>support@viswas.com</ThemedText>
+              <ThemedText style={styles.contactText}>support@topscore.com</ThemedText>
               <IconSymbol name="chevron.right" size={18} color="#999" />
             </TouchableOpacity>
 
@@ -108,7 +108,7 @@ export default function StudentAboutScreen() {
           {/* Copyright */}
           <View style={styles.copyrightSection}>
             <ThemedText style={styles.copyrightText}>
-              © 2024 VISHWAS EDUTECH. All rights reserved.
+              © 2024 topscore. All rights reserved.
             </ThemedText>
           </View>
         </ScrollView>

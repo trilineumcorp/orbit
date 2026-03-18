@@ -117,18 +117,37 @@ export default function AdminContentScreen() {
     
     setLoading(true);
     try {
+      console.log('Loading content:', {
+        standard: navigation.selectedStandard,
+        subject: navigation.selectedSubject,
+        type: navigation.selectedContentType
+      });
+      
       if (navigation.selectedContentType === 'videos') {
         const data = await getVideos(navigation.selectedStandard, navigation.selectedSubject);
+        console.log('Loaded videos:', data.length);
         setVideos(data);
       } else if (navigation.selectedContentType === 'flipbooks') {
         const data = await getFlipBooks(navigation.selectedStandard, navigation.selectedSubject);
+        console.log('Loaded flipbooks:', data.length);
         setFlipbooks(data);
       } else if (navigation.selectedContentType === 'exams') {
         const data = await getExams(navigation.selectedStandard, navigation.selectedSubject);
+        console.log('Loaded exams:', data.length);
         setExams(data);
       }
     } catch (error: any) {
-      Alert.alert('Error', error.message || 'Failed to load content');
+      console.error('Failed to load content:', error);
+      const errorMessage = error.message || 'Failed to load content. Please check:\n1. Backend server is running on port 3000\n2. Network connection is active';
+      Alert.alert('Error', errorMessage);
+      // Set empty arrays on error
+      if (navigation.selectedContentType === 'videos') {
+        setVideos([]);
+      } else if (navigation.selectedContentType === 'flipbooks') {
+        setFlipbooks([]);
+      } else if (navigation.selectedContentType === 'exams') {
+        setExams([]);
+      }
     } finally {
       setLoading(false);
     }
@@ -433,7 +452,7 @@ export default function AdminContentScreen() {
           style={[styles.folderCard, isDark && styles.folderCardDark]}
           onPress={() => handleContentTypeSelect('flipbooks')}>
           <View style={[styles.folderIcon, { backgroundColor: ThemeColors.deepBlue + '20' }]}>
-            <IconSymbol name="book.pages.fill" size={32} color={ThemeColors.deepBlue} />
+            <IconSymbol name="book.closed.fill" size={32} color={ThemeColors.deepBlue} />
           </View>
           <ThemedText style={styles.folderText}>Flipbooks</ThemedText>
         </TouchableOpacity>
@@ -524,7 +543,7 @@ export default function AdminContentScreen() {
         <VideoSkeleton count={6} />
       ) : flipbooks.length === 0 ? (
         <View style={styles.emptyState}>
-          <IconSymbol name="book.pages.fill" size={64} color={ThemeColors.deepBlue} />
+          <IconSymbol name="book.closed.fill" size={64} color={ThemeColors.deepBlue} />
           <ThemedText style={styles.emptyText}>No flipbooks yet</ThemedText>
           <ThemedText style={styles.emptySubtext}>Add your first flipbook to get started</ThemedText>
         </View>

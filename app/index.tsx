@@ -3,56 +3,64 @@ import { useEffect } from 'react';
 import { ActivityIndicator, View, StyleSheet } from 'react-native';
 import { useAuth } from '@/contexts/AuthContext';
 import { ThemeColors } from '@/constants/theme';
+import { ErrorBoundary } from '@/components/error-boundary';
 
 export default function Index() {
   const { isAuthenticated, isLoading, user } = useAuth();
   const router = useRouter();
 
   useEffect(() => {
+    // Safety timeout - always navigate to login after 2 seconds
+    const safetyTimeout = setTimeout(() => {
+      console.log('Root index: Safety timeout - redirecting to login');
+      router.replace('/auth/login');
+    }, 2000);
+
+    // Don't navigate while loading
     if (isLoading) {
-      return;
+      return () => clearTimeout(safetyTimeout);
     }
 
-    // Small delay to ensure everything is ready
-    const timer = setTimeout(() => {
-      // If not authenticated, redirect to login
-      if (!isAuthenticated || !user) {
-        console.log('Root index: Not authenticated, redirecting to login');
-        router.replace('/auth/login');
-        return;
-      }
+    // Clear safety timeout
+    clearTimeout(safetyTimeout);
 
-      console.log('Root index: User authenticated, role:', user.role);
-      
-      // Redirect based on role
-      if (user.role === 'student') {
-        console.log('Root index: Redirecting student to student route group');
-        router.replace('/(student)/');
-      } else if (user.role === 'admin') {
-        console.log('Root index: Redirecting admin to admin route group');
-        router.replace('/(admin)/');
-      } else {
-        // Unknown role, redirect to login
+    // Navigate immediately when not loading
+    const navigate = () => {
+      try {
+        if (!isAuthenticated || !user) {
+          console.log('Root index: Not authenticated, redirecting to login');
+          router.replace('/auth/login');
+        } else {
+          console.log('Root index: User authenticated, role:', user.role);
+          if (user.role === 'student') {
+            router.replace('/(student)/');
+          } else if (user.role === 'admin') {
+            router.replace('/(admin)/');
+          } else {
+            router.replace('/auth/login');
+          }
+        }
+      } catch (error) {
+        console.error('Navigation error:', error);
         router.replace('/auth/login');
       }
-    }, 100);
+    };
 
-    return () => clearTimeout(timer);
+    // Small delay to ensure router is ready
+    const timer = setTimeout(navigate, 50);
+
+    return () => {
+      clearTimeout(safetyTimeout);
+      clearTimeout(timer);
+    };
   }, [isLoading, isAuthenticated, user, router]);
 
-  if (isLoading) {
-    return (
+  return (
+    <ErrorBoundary>
       <View style={styles.container}>
         <ActivityIndicator size="large" color={ThemeColors.orange} />
       </View>
-    );
-  }
-
-  // Show loading while redirecting
-  return (
-    <View style={styles.container}>
-      <ActivityIndicator size="large" color={ThemeColors.orange} />
-    </View>
+    </ErrorBoundary>
   );
 }
 

@@ -1,6 +1,5 @@
 import React from 'react';
-import { View, StyleSheet, Image, Dimensions } from 'react-native';
-import { ThemedText } from './themed-text';
+import { View, StyleSheet, Image, Dimensions, Text } from 'react-native';
 import { ThemeColors } from '@/constants/theme';
 
 const { width: screenWidth, height: screenHeight } = Dimensions.get('window');
@@ -8,18 +7,18 @@ const { width: screenWidth, height: screenHeight } = Dimensions.get('window');
 export function CustomSplashScreen() {
   return (
     <View style={styles.container}>
-      {/* Main Logo - Larger Size in Upper Half */}
+      {/* Main Logo - Centered */}
       <View style={styles.logoContainer}>
         <Image
-          source={require('@/assets/images/logo.jpg')}
+          source={require('@/assets/images/logo.png')}
           style={styles.mainLogo}
           resizeMode="contain"
         />
-      </View>
-
-      {/* Powered By Section in Lower Half */}
-      <View style={styles.poweredByContainer}>
-        <ThemedText style={styles.poweredByText}>Powered By</ThemedText>
+        
+        {/* "From" Text */}
+        <Text style={styles.fromText}>From</Text>
+        
+        {/* Trilineum Logo */}
         <View style={styles.trilineumLogoContainer}>
           <Image
             source={require('@/assets/images/trilineum/trilineumlogo.png')}
@@ -36,48 +35,38 @@ const styles = StyleSheet.create({
   container: {
     flex: 1,
     backgroundColor: '#ffffff',
-    justifyContent: 'space-between',
+    justifyContent: 'center',
     alignItems: 'center',
     paddingHorizontal: 40,
-    paddingTop: screenHeight * 0.15, // Top padding for logo
-    paddingBottom: screenHeight * 0.12, // Bottom padding for Powered By section
   },
   logoContainer: {
-    flex: 1,
-    justifyContent: 'flex-start',
+    justifyContent: 'center',
     alignItems: 'center',
     width: '100%',
-    paddingTop: 20,
   },
   mainLogo: {
-    width: screenWidth * 0.8, // Increased size - 80% of screen width for stunning effect
-    height: screenWidth * 0.8,
-    maxWidth: 500,
-    maxHeight: 500,
+    width: screenWidth * 0.7, // 70% of screen width
+    height: screenWidth * 0.7,
+    maxWidth: 400,
+    maxHeight: 400,
+    marginBottom: 30,
   },
-  poweredByContainer: {
-    alignItems: 'center',
-    justifyContent: 'flex-end',
-    width: '100%',
-    paddingBottom: 20,
-  },
-  poweredByText: {
-    fontSize: 16,
+  fromText: {
+    fontSize: 18,
+    color: ThemeColors.grayText,
     fontWeight: '500',
-    color: '#666666',
-    marginBottom: 12,
-    letterSpacing: 0.5,
+    marginTop: 10,
   },
   trilineumLogoContainer: {
-    alignItems: 'center',
     justifyContent: 'center',
-    width: '100%',
+    alignItems: 'center',
+    // marginTop: 10,
   },
   trilineumLogo: {
-    width: screenWidth * 0.35, // 35% of screen width
-    height: screenWidth * 0.16,
+    width: screenWidth * 0.4, // 40% of screen width
+    height: screenWidth * 0.15,
     maxWidth: 200,
-    maxHeight: 90,
+    maxHeight: 80,
   },
 });
 

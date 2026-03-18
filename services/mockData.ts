@@ -268,43 +268,48 @@ export const mockOMRResults: OMRResult[] = [
 
 // Initialize mock data function
 export const initializeMockData = async () => {
-  const { saveVideos, saveFlipBooks, saveExams, saveDoubts, saveOMRResult } = await import('./storage');
-  const { getVideos, getFlipBooks, getExams, getDoubts, getOMRResults } = await import('./storage');
+  try {
+    const { saveVideos, saveFlipBooks, saveExams, saveDoubts, saveOMRResult } = await import('./storage');
+    const { getVideos, getFlipBooks, getExams, getDoubts, getOMRResults } = await import('./storage');
 
-  // Only initialize if storage is empty
-  const existingVideos = await getVideos();
-  if (existingVideos.length === 0) {
-    await saveVideos(mockVideos);
-  }
-
-  const existingFlipBooks = await getFlipBooks();
-  if (existingFlipBooks.length === 0) {
-    await saveFlipBooks(mockFlipBooks);
-  }
-
-  const existingExams = await getExams();
-  if (existingExams.length === 0) {
-    await saveExams(mockExams);
-  }
-
-  const existingDoubts = await getDoubts();
-  if (existingDoubts.length === 0) {
-    await saveDoubts(mockDoubts);
-  }
-
-  const existingOMRResults = await getOMRResults();
-  if (existingOMRResults.length === 0) {
-    for (const result of mockOMRResults) {
-      await saveOMRResult(result);
+    // Only initialize if storage is empty
+    const existingVideos = await getVideos();
+    if (existingVideos.length === 0) {
+      await saveVideos(mockVideos);
     }
-  }
 
-  const { getExamResults, saveExamResult } = await import('./storage');
-  const existingExamResults = await getExamResults();
-  if (existingExamResults.length === 0) {
-    for (const result of mockExamResults) {
-      await saveExamResult(result);
+    const existingFlipBooks = await getFlipBooks();
+    if (existingFlipBooks.length === 0) {
+      await saveFlipBooks(mockFlipBooks);
     }
+
+    const existingExams = await getExams();
+    if (existingExams.length === 0) {
+      await saveExams(mockExams);
+    }
+
+    const existingDoubts = await getDoubts();
+    if (existingDoubts.length === 0) {
+      await saveDoubts(mockDoubts);
+    }
+
+    const existingOMRResults = await getOMRResults();
+    if (existingOMRResults.length === 0) {
+      for (const result of mockOMRResults) {
+        await saveOMRResult(result);
+      }
+    }
+
+    const { getExamResults, saveExamResult } = await import('./storage');
+    const existingExamResults = await getExamResults();
+    if (existingExamResults.length === 0) {
+      for (const result of mockExamResults) {
+        await saveExamResult(result);
+      }
+    }
+  } catch (error) {
+    // Silently fail - mock data initialization is not critical
+    console.warn('Mock data initialization error (non-critical):', error);
   }
 };
 

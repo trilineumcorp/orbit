@@ -22,6 +22,7 @@ import { useColorScheme } from '@/hooks/use-color-scheme';
 import { IconSymbol } from '@/components/ui/icon-symbol';
 import AsyncStorage from '@react-native-async-storage/async-storage';
 import { apiService } from '@/services/api';
+import { ErrorBoundary } from '@/components/error-boundary';
 
 const REMEMBER_ME_KEY = 'remember_me';
 const REMEMBERED_EMAIL_KEY = 'remembered_email';
@@ -35,6 +36,11 @@ export default function LoginScreen() {
   const [showPassword, setShowPassword] = useState(false);
   const [rememberMe, setRememberMe] = useState(false);
   const [userType, setUserType] = useState<'admin' | 'student'>('student');
+
+  // Log when component mounts
+  useEffect(() => {
+    console.log('LoginScreen: Component mounted');
+  }, []);
 
   // Load remembered email on mount
   useEffect(() => {
@@ -121,8 +127,9 @@ export default function LoginScreen() {
   const isDark = colorScheme === 'dark';
 
   return (
-    <SafeAreaView style={styles.safeArea} edges={['top', 'bottom']}>
-      <ThemedView style={styles.container}>
+    <ErrorBoundary>
+      <SafeAreaView style={styles.safeArea} edges={['top', 'bottom']}>
+        <ThemedView style={styles.container}>
         <KeyboardAvoidingView
           behavior={Platform.OS === 'ios' ? 'padding' : 'height'}
           style={styles.keyboardView}
@@ -288,6 +295,7 @@ export default function LoginScreen() {
         </KeyboardAvoidingView>
       </ThemedView>
     </SafeAreaView>
+    </ErrorBoundary>
   );
 }
 
