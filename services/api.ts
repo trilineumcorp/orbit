@@ -8,7 +8,7 @@ const getApiBaseUrl = () => {
   if (process.env.EXPO_PUBLIC_API_URL) {
     return process.env.EXPO_PUBLIC_API_URL;
   }
-  
+
   // Platform-specific defaults
   if (Platform.OS === 'android') {
     // Android emulator uses 10.0.2.2 to access host machine's localhost
@@ -68,14 +68,14 @@ class ApiService {
     let data;
     try {
       const text = await response.text();
-      
+
       // Check if response is HTML (error page)
       if (text.trim().startsWith('<!DOCTYPE') || text.trim().startsWith('<html')) {
         console.error('Received HTML response instead of JSON.');
         console.error('Response preview:', text.substring(0, 200));
         throw new Error('Server returned HTML instead of JSON. Make sure the backend server is running on port 3000.');
       }
-      
+
       // Check if response is empty
       if (!text || text.trim().length === 0) {
         data = {};
@@ -108,14 +108,14 @@ class ApiService {
     try {
       const url = `${this.baseURL}${endpoint}`;
       console.log(`API GET: ${url}`);
-      
+
       const response = await fetch(url, {
         method: 'GET',
         headers: await this.getHeaders(requireAuth),
       });
 
       console.log(`API Response status: ${response.status}, Content-Type: ${response.headers.get('content-type')}`);
-      
+
       return await this.handleResponse<T>(response);
     } catch (error: any) {
       console.error(`GET ${endpoint} error:`, error);

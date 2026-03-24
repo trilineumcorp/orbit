@@ -1,19 +1,19 @@
 {
   "expo": {
-    "name": "topscore",
-    "slug": "topscore",
+    "name": "Orbit",
+    "slug": "orbit",
     "version": "1.0.0",
     "orientation": "portrait",
 
     "icon": "./assets/images/logo.png",
 
-    "scheme": "topscore",
+    "scheme": "orbit",
     "userInterfaceStyle": "automatic",
     "associatedDomains": [],
 
     "ios": {
       "supportsTablet": true,
-      "bundleIdentifier": "com.trilineum.topscore",
+      "bundleIdentifier": "com.trilineum.orbit",
       "splash": {
         "image": "./assets/images/logo.png",
         "resizeMode": "contain",
@@ -22,7 +22,7 @@
     },
 
     "android": {
-      "package": "com.trilineum.topscore",
+      "package": "com.trilineum.orbit",
       "adaptiveIcon": {
         "foregroundImage": "./assets/images/logo.png",
         "backgroundColor": "#FF6B35"
