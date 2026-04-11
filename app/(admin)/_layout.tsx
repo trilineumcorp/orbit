@@ -71,6 +71,10 @@ export default function AdminLayout() {
         <Stack.Screen name="notifications" />
         <Stack.Screen name="support" />
         <Stack.Screen name="settings" />
+        <Stack.Screen name="moderation" options={{ presentation: 'card', headerShown: false }} />
+        <Stack.Screen name="bulk-operations" options={{ presentation: 'card', headerShown: false }} />
+        <Stack.Screen name="system-settings" options={{ presentation: 'card', headerShown: false }} />
+        <Stack.Screen name="gamification-tools" options={{ presentation: 'card', headerShown: false }} />
       </Stack>
     </View>
   );
@@ -94,4 +98,3 @@ const styles = StyleSheet.create({
     alignItems: 'center',
   },
 });
-

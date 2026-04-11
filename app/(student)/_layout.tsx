@@ -170,6 +170,14 @@ export default function StudentLayout() {
           name="omr-result"
           options={{ presentation: 'card', headerShown: false }}
         />
+        <Stack.Screen name="gamification" options={{ presentation: 'card', headerShown: false }} />
+        <Stack.Screen name="social" options={{ presentation: 'card', headerShown: false }} />
+        <Stack.Screen name="premium" options={{ presentation: 'card', headerShown: false }} />
+        <Stack.Screen name="more" options={{ presentation: 'card', headerShown: false }} />
+        <Stack.Screen name="watch-later" options={{ presentation: 'card', headerShown: false }} />
+        <Stack.Screen name="ai-chat" options={{ presentation: 'card', headerShown: false }} />
+        <Stack.Screen name="notifications" options={{ presentation: 'card', headerShown: false }} />
+        <Stack.Screen name="activities" options={{ presentation: 'card', headerShown: false }} />
       </Stack>
       <BottomNavbar role="student" />
     </View>

@@ -193,6 +193,24 @@ export default function DoubtsScreen() {
             onChangeText={setSearchQuery}
           />
         </View>
+
+        <TouchableOpacity style={styles.aiBannerContainer} onPress={() => router.push('/ai-chat')} activeOpacity={0.9}>
+          <LinearGradient
+            colors={[ThemeColors.deepBlue, '#0A2E3D']}
+            start={{ x: 0, y: 0 }}
+            end={{ x: 1, y: 0 }}
+            style={styles.aiBannerGradient}
+          >
+            <View style={styles.aiBannerIcon}>
+              <IconSymbol name="sparkles" size={24} color={ThemeColors.orange} />
+            </View>
+            <View style={styles.aiBannerTextContainer}>
+              <ThemedText style={{ color: '#fff', fontSize: 16, fontWeight: '700' }}>Ask the AI Instructor</ThemedText>
+              <ThemedText style={{ color: '#fff', opacity: 0.8, fontSize: 13, marginTop: 2 }}>Get instant answers before posting</ThemedText>
+            </View>
+            <IconSymbol name="chevron.right" size={20} color="#fff" />
+          </LinearGradient>
+        </TouchableOpacity>
         {loading ? (
           <ListSkeleton count={5} itemHeight={120} />
         ) : filteredDoubts.length === 0 ? (
@@ -391,6 +409,39 @@ const styles = StyleSheet.create({
         elevation: 3,
       },
     }),
+  },
+  aiBannerContainer: {
+    borderRadius: 16,
+    marginBottom: 20,
+    overflow: 'hidden',
+    ...Platform.select({
+      ios: {
+        shadowColor: '#000',
+        shadowOffset: { width: 0, height: 4 },
+        shadowOpacity: 0.15,
+        shadowRadius: 8,
+      },
+      android: {
+        elevation: 5,
+      },
+    }),
+  },
+  aiBannerGradient: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    padding: 16,
+    gap: 12,
+  },
+  aiBannerIcon: {
+    width: 44,
+    height: 44,
+    borderRadius: 22,
+    backgroundColor: 'rgba(255,122,0,0.2)', // Orange with opacity
+    justifyContent: 'center',
+    alignItems: 'center',
+  },
+  aiBannerTextContainer: {
+    flex: 1,
   },
   doubtCard: {
     padding: 20,

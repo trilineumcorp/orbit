@@ -87,8 +87,9 @@ export default function ResetPasswordScreen() {
         {
           token: resetToken,
           password: password.trim(),
+          confirmPassword: confirmPassword.trim(),
         },
-        false // Don't require auth
+        false
       );
 
       console.log('Reset password response:', response);
@@ -121,7 +122,6 @@ export default function ResetPasswordScreen() {
 
   const isDark = colorScheme === 'dark';
 
-  // Show error if no token after a brief delay (to allow params to load)
   const [showError, setShowError] = useState(false);
   
   useEffect(() => {
@@ -155,7 +155,6 @@ export default function ResetPasswordScreen() {
   }
 
   if (!token) {
-    // Show loading state while checking for token
     return (
       <SafeAreaView style={styles.safeArea} edges={['top', 'bottom']}>
         <ThemedView style={styles.container}>
@@ -438,4 +437,3 @@ const styles = StyleSheet.create({
     fontWeight: '600',
   },
 });
-

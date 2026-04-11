@@ -10,6 +10,7 @@ const STORAGE_KEYS = {
   EXAM_RESULTS: 'exam_results',
   STUDENT_REPORTS: 'student_reports',
   OMR_RESULTS: 'omr_results',
+  WATCH_LATER: 'watch_later',
 };
 
 // Video storage
@@ -20,6 +21,36 @@ export const saveVideos = async (videos: Video[]): Promise<void> => {
 export const getVideos = async (): Promise<Video[]> => {
   const data = await AsyncStorage.getItem(STORAGE_KEYS.VIDEOS);
   return data ? JSON.parse(data) : [];
+};
+
+// Watch Later storage
+export const saveWatchLater = async (videoIds: string[]): Promise<void> => {
+  await AsyncStorage.setItem(STORAGE_KEYS.WATCH_LATER, JSON.stringify(videoIds));
+};
+
+export const getWatchLater = async (): Promise<string[]> => {
+  const data = await AsyncStorage.getItem(STORAGE_KEYS.WATCH_LATER);
+  return data ? JSON.parse(data) : [];
+};
+
+export const checkWatchLater = async (videoId: string): Promise<boolean> => {
+  const watchLater = await getWatchLater();
+  return watchLater.includes(videoId);
+};
+
+export const toggleWatchLater = async (videoId: string): Promise<boolean> => {
+  const watchLater = await getWatchLater();
+  const index = watchLater.indexOf(videoId);
+  
+  if (index >= 0) {
+    watchLater.splice(index, 1);
+    await saveWatchLater(watchLater);
+    return false; // Resulting state is NOT bookmarked
+  } else {
+    watchLater.push(videoId);
+    await saveWatchLater(watchLater);
+    return true; // Resulting state is Bookmarked
+  }
 };
 
 // FlipBook storage

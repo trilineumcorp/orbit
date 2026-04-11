@@ -1,4 +1,4 @@
-import React, { useState } from 'react';
+import React, { useState, useEffect } from 'react';
 import {
   View,
   Text,
@@ -22,6 +22,7 @@ import { useColorScheme } from '@/hooks/use-color-scheme';
 import { Image } from 'expo-image';
 import { AdminDrawer } from '@/components/admin-drawer';
 import { Avatar } from '@/components/avatar';
+import { getAdminDashboardStats } from '@/services/adminApi';
 
 const { width: screenWidth } = Dimensions.get('window');
 const isSmallScreen = screenWidth < 375;
@@ -43,6 +44,19 @@ export default function AdminDashboard() {
   const [drawerVisible, setDrawerVisible] = useState(false);
   const [searchQuery, setSearchQuery] = useState('');
   const [selectedCategory, setSelectedCategory] = useState('Popular');
+  const [dashStats, setDashStats] = useState<{
+    users: { total: number; active: number };
+    content: { discussions: number };
+    moderation: { totalReports: number; pendingReports: number };
+    operations: { totalBulkOperations: number };
+  } | null>(null);
+
+  useEffect(() => {
+    (async () => {
+      const s = await getAdminDashboardStats();
+      setDashStats(s);
+    })();
+  }, []);
 
   const categories = ['Popular', 'Students', 'Exams', 'Content', 'Reports'];
 
@@ -213,6 +227,30 @@ export default function AdminDashboard() {
           ))}
         </ScrollView>
 
+        {dashStats && (
+          <View style={[styles.liveStatsBar, colorScheme === 'dark' && styles.liveStatsBarDark]}>
+            <ThemedText style={styles.liveStatsTitle}>Live overview</ThemedText>
+            <View style={styles.liveStatsRow}>
+              <View style={styles.liveStatCell}>
+                <ThemedText style={styles.liveStatNum}>{dashStats.users.total}</ThemedText>
+                <ThemedText style={styles.liveStatLbl}>Users</ThemedText>
+              </View>
+              <View style={styles.liveStatCell}>
+                <ThemedText style={styles.liveStatNum}>{dashStats.users.active}</ThemedText>
+                <ThemedText style={styles.liveStatLbl}>Active (7d)</ThemedText>
+              </View>
+              <View style={styles.liveStatCell}>
+                <ThemedText style={styles.liveStatNum}>{dashStats.content.discussions}</ThemedText>
+                <ThemedText style={styles.liveStatLbl}>Discussions</ThemedText>
+              </View>
+              <View style={styles.liveStatCell}>
+                <ThemedText style={styles.liveStatNum}>{dashStats.moderation.pendingReports}</ThemedText>
+                <ThemedText style={styles.liveStatLbl}>Reports</ThemedText>
+              </View>
+            </View>
+          </View>
+        )}
+
         {/* Content Cards */}
         <View style={styles.cardsContainer}>
           {filteredMenuItems.length > 0 ? (
@@ -226,9 +264,9 @@ export default function AdminDashboard() {
                 <View style={styles.cardInstructorRow}>
                   <View style={styles.instructorInfo}>
                     <Avatar
-                      name={user?.name || 'Admin'}
+                      name={user?.name ?? user?.email ?? 'Admin'}
                       email={user?.email}
-                      avatarUrl={user?.avatarUrl}
+                      avatarUrl={user?.avatarUrl ?? null}
                       size="medium"
                       showBorder={false}
                     />
@@ -663,5 +701,44 @@ const styles = StyleSheet.create({
     textAlign: 'center',
     opacity: 0.7,
   },
+  liveStatsBar: {
+    marginHorizontal: 16,
+    marginBottom: 16,
+    padding: 14,
+    borderRadius: 14,
+    backgroundColor: '#E8F4FD',
+    borderWidth: 1,
+    borderColor: '#C5DDF0',
+  },
+  liveStatsBarDark: {
+    backgroundColor: '#1A3D4D',
+    borderColor: '#2A4D5D',
+  },
+  liveStatsTitle: {
+    fontSize: 14,
+    fontWeight: '700',
+    marginBottom: 10,
+    opacity: 0.85,
+  },
+  liveStatsRow: {
+    flexDirection: 'row',
+    flexWrap: 'wrap',
+    justifyContent: 'space-between',
+    gap: 8,
+  },
+  liveStatCell: {
+    minWidth: '22%',
+    alignItems: 'center',
+  },
+  liveStatNum: {
+    fontSize: 18,
+    fontWeight: '800',
+    color: ThemeColors.deepBlue,
+  },
+  liveStatLbl: {
+    fontSize: 10,
+    opacity: 0.75,
+    marginTop: 2,
+    textAlign: 'center',
+  },
 });
-

@@ -21,8 +21,7 @@ export default function CheckEmailScreen() {
   const router = useRouter();
   const params = useLocalSearchParams<{ email?: string | string[] }>();
   const colorScheme = useColorScheme();
-  
-  // Extract email from params
+
   const email = Array.isArray(params.email) ? params.email[0] : params.email;
 
   const isDark = colorScheme === 'dark';
@@ -232,4 +231,3 @@ const styles = StyleSheet.create({
     fontWeight: '600',
   },
 });
-

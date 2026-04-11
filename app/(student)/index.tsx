@@ -5,22 +5,37 @@ import { Colors, ThemeColors } from '@/constants/theme';
 import { useColorScheme } from '@/hooks/use-color-scheme';
 import { getDoubts, getExamResults } from '@/services/storage';
 import { getVideos, getFlipBooks, getExams } from '@/services/content';
+import { examResultService } from '@/services/exam-results';
+import type { ExamResult } from '@/types';
 import { Image } from 'expo-image';
 import { LinearGradient } from 'expo-linear-gradient';
 import { Link } from 'expo-router';
 import React, { useEffect, useState } from 'react';
-import { Platform, ScrollView, StyleSheet, TouchableOpacity, View, Dimensions, useWindowDimensions, TextInput } from 'react-native';
+import {
+  Platform,
+  ScrollView,
+  StyleSheet,
+  TouchableOpacity,
+  View,
+  Dimensions,
+  useWindowDimensions,
+  TextInput,
+  StatusBar,
+} from 'react-native';
+import { SafeAreaView } from 'react-native-safe-area-context';
 import { useAuth } from '@/contexts/AuthContext';
 import { ProfileMenu } from '@/components/profile-menu';
 
-const { width: screenWidth, height: screenHeight } = Dimensions.get('window');
+const { width: screenWidth } = Dimensions.get('window');
 const isSmallScreen = screenWidth < 375;
 const isTablet = screenWidth >= 768;
 const isDesktop = screenWidth >= 1024;
 
 export default function HomeScreen() {
   const colorScheme = useColorScheme();
-  const { width, height } = useWindowDimensions();
+  const { width } = useWindowDimensions();
+  const { user } = useAuth();
+
   const [stats, setStats] = useState({
     videos: 0,
     flipbooks: 0,
@@ -30,21 +45,34 @@ export default function HomeScreen() {
   });
   const [searchQuery, setSearchQuery] = useState('');
   const [loading, setLoading] = useState(true);
-  
-  // Responsive values
+
   const isCurrentTablet = width >= 768;
   const isCurrentDesktop = width >= 1024;
   const isCurrentSmall = width < 375;
 
   useEffect(() => {
     loadStats();
-  }, []);
+  }, [user?.id, user?.class]);
+
+  const mergeExamResultCount = (local: ExamResult[], remote: ExamResult[]) => {
+    const m = new Map<string, ExamResult>();
+    const add = (r: ExamResult) => {
+      const key = `${r.examId}_${new Date(r.completedAt).getTime()}`;
+      const prev = m.get(key);
+      if (!prev || new Date(r.completedAt) >= new Date(prev.completedAt)) {
+        m.set(key, r);
+      }
+    };
+    local.forEach(add);
+    remote.forEach(add);
+    return m.size;
+  };
 
   const loadStats = async () => {
     try {
       setLoading(true);
-      let minLoadingTime = 300; // Default minimum loading time
-      
+      let minLoadingTime = 300;
+
       try {
         const { detectNetworkSpeed, getMinLoadingTime } = require('@/utils/network');
         const networkSpeed = await detectNetworkSpeed();
@@ -52,21 +80,25 @@ export default function HomeScreen() {
       } catch (networkError) {
         console.warn('Network speed detection failed, using default:', networkError);
       }
-      
+
       const startTime = Date.now();
-      // Get user's standard from class field
       const userStandard = user?.class ? parseInt(user.class, 10) : undefined;
-      const [videos, flipbooks, exams, doubts, results] = await Promise.all([
+
+      const [videos, flipbooks, exams, doubts, localResults, remoteResults] = await Promise.all([
         getVideos(userStandard),
         getFlipBooks(userStandard),
         getExams(userStandard),
         getDoubts(),
         getExamResults(),
+        examResultService.getAllResults().catch(() => [] as ExamResult[]),
       ]);
+      const resultsCount = mergeExamResultCount(
+        localResults as ExamResult[],
+        remoteResults
+      );
 
       const elapsedTime = Date.now() - startTime;
-      
-      // Ensure minimum loading time for better UX
+
       if (elapsedTime < minLoadingTime) {
         await new Promise(resolve => setTimeout(resolve, minLoadingTime - elapsedTime));
       }
@@ -76,11 +108,10 @@ export default function HomeScreen() {
         flipbooks: flipbooks.length,
         exams: exams.length,
         doubts: doubts.length,
-        results: results.length,
+        results: resultsCount,
       });
     } catch (error) {
       console.error('Failed to load stats:', error);
-      // Set default stats on error
       setStats({
         videos: 0,
         flipbooks: 0,
@@ -94,144 +125,198 @@ export default function HomeScreen() {
   };
 
   const colors = Colors[colorScheme ?? 'light'];
-  const { user } = useAuth();
 
   const quickAccessItems = [
-    { name: 'Videos', icon: 'play.circle.fill' as const, color: ThemeColors.orange, href: '/videos' as const },
-    { name: 'Result', icon: 'doc.text.fill' as const, color: ThemeColors.deepBlue, href: '/reports' as const },
-    { name: 'Report Issue', icon: 'exclamationmark.triangle.fill' as const, color: ThemeColors.orange, href: '/doubts' as const },
+    {
+      name: 'Videos',
+      icon: 'play.circle.fill' as const,
+      color: ThemeColors.orange,
+      href: '/videos' as const,
+    },
+    {
+      name: 'Result',
+      icon: 'doc.text.fill' as const,
+      color: ThemeColors.deepBlue,
+      href: '/reports' as const,
+    },
+    {
+      name: 'Report Issue',
+      icon: 'exclamationmark.triangle.fill' as const,
+      color: ThemeColors.orange,
+      href: '/doubts' as const,
+    },
   ];
 
   const featureItems = [
-    { name: 'VIDEOS', icon: 'play.rectangle.fill' as const, color: ThemeColors.orange, href: '/videos' as const },
-    { name: 'FLIP BOOK', icon: 'book.closed.fill' as const, color: ThemeColors.deepBlue, href: '/flipbooks' as const },
-    { name: 'EXAMS', icon: 'doc.text.fill' as const, color: ThemeColors.orange, href: '/exams' as const },
-    { name: 'OMR SCANNER', icon: 'camera.fill' as const, color: ThemeColors.deepBlue, href: '/omr-scanner' as const },
+    {
+      name: 'VIDEOS',
+      icon: 'play.rectangle.fill' as const,
+      color: ThemeColors.orange,
+      href: '/videos' as const,
+    },
+    {
+      name: 'FLIP BOOK',
+      icon: 'book.closed.fill' as const,
+      color: ThemeColors.deepBlue,
+      href: '/flipbooks' as const,
+    },
+    {
+      name: 'EXAMS',
+      icon: 'doc.text.fill' as const,
+      color: ThemeColors.orange,
+      href: '/exams' as const,
+    },
+    {
+      name: 'ACTIVITIES',
+      icon: 'square.grid.2x2.fill' as const,
+      color: ThemeColors.deepBlue,
+      href: '/activities' as const,
+    },
   ];
 
   return (
-    <ThemedView style={styles.container}>
-      {/* Top Header with Logo and Profile Avatar */}
-      <View style={styles.topHeader}>
-        {/* Logo Section */}
-        <View style={styles.logoSection}>
-          <View style={styles.logoContainer}>
+    <SafeAreaView style={styles.safeArea} edges={['top', 'left', 'right', 'bottom']}>
+      <StatusBar
+        barStyle={colorScheme === 'dark' ? 'light-content' : 'dark-content'}
+        backgroundColor={ThemeColors.white}
+        translucent={false}
+      />
+
+      <ThemedView style={styles.container}>
+        <View style={styles.headerWrapper}>
+          <View style={styles.topHeader}>
+            <View style={styles.logoSection}>
+              <View style={styles.logoContainer}>
+                <Image
+                  source={require('@/assets/images/logo.png')}
+                  style={styles.logoImage}
+                  contentFit="contain"
+                />
+              </View>
+            </View>
+
+            <View style={styles.profileAvatarContainer}>
+              <ProfileMenu
+                user={{
+                  name: user?.name,
+                  email: user?.email,
+                  role: user?.role,
+                  avatarUrl: user?.avatarUrl,
+                }}
+              />
+            </View>
+          </View>
+
+          <View style={styles.searchSectionWrapper}>
+            <View style={styles.searchSection}>
+              <View style={styles.searchContainer}>
+                <IconSymbol name="magnifyingglass" size={20} color="#8E8E93" />
+                <TextInput
+                  style={styles.searchInput}
+                  placeholder="Search"
+                  placeholderTextColor="#8E8E93"
+                  value={searchQuery}
+                  onChangeText={setSearchQuery}
+                />
+              </View>
+
+              <TouchableOpacity style={styles.filterButton} activeOpacity={0.7}>
+                <IconSymbol
+                  name="line.3.horizontal.decrease.circle"
+                  size={22}
+                  color={ThemeColors.grayText}
+                />
+              </TouchableOpacity>
+            </View>
+          </View>
+        </View>
+
+        <ScrollView
+          style={styles.content}
+          contentContainerStyle={styles.contentContainer}
+          showsVerticalScrollIndicator={false}
+        >
+          <View style={styles.welcomeBanner}>
             <Image
-              source={require('@/assets/images/logo.png')}
-              style={styles.logoImage}
-              contentFit="contain"
+              source={require('@/assets/images/home/image4.png')}
+              style={styles.welcomeImage}
+              contentFit="cover"
             />
           </View>
-        </View>
 
-        {/* Profile Avatar at Top Right */}
-        <View style={styles.profileAvatarContainer}>
-          <ProfileMenu
-            user={{
-              name: user?.name,
-              email: user?.email,
-              role: user?.role,
-              avatarUrl: user?.avatarUrl,
-            }}
-          />
-        </View>
-      </View>
-
-      {/* Search Bar Section */}
-      <View style={styles.searchSectionWrapper}>
-        <View style={styles.searchSection}>
-          <View style={styles.searchContainer}>
-            <IconSymbol name="magnifyingglass" size={20} color="#8E8E93" />
-            <TextInput
-              style={styles.searchInput}
-              placeholder="Search"
-              placeholderTextColor="#8E8E93"
-              value={searchQuery}
-              onChangeText={setSearchQuery}
-            />
-          </View>
-          <TouchableOpacity style={styles.filterButton} activeOpacity={0.7}>
-            <IconSymbol name="line.3.horizontal.decrease.circle" size={24} color={ThemeColors.grayText} />
-          </TouchableOpacity>
-        </View>
-      </View>
-
-      <ScrollView 
-        style={styles.content}
-        contentContainerStyle={styles.contentContainer}
-        showsVerticalScrollIndicator={false}>
-        
-        {/* Welcome Banner */}
-        <View style={styles.welcomeBanner}>
-          <Image
-            source={require('@/assets/images/home/image4.png')}
-            style={styles.welcomeImage}
-            contentFit="cover"
-          />
-        </View>
-
-        {/* Quick Access Cards */}
-        <View style={styles.quickAccessContainer}>
-          {quickAccessItems.map((item, index) => (
-            <Link key={index} href={item.href} asChild>
-              <TouchableOpacity
-                style={[styles.quickAccessCard, styles.cardShadow]}
-                activeOpacity={0.7}>
-                <View style={[styles.quickAccessIconContainer, { backgroundColor: item.color + '15' }]}>
-                  <IconSymbol name={item.icon} size={32} color={item.color} />
-                </View>
-                <ThemedText style={[styles.quickAccessLabel, { color: ThemeColors.grayText }]}>
-                  {item.name}
-                </ThemedText>
-              </TouchableOpacity>
-            </Link>
-          ))}
-        </View>
-
-        {/* Feature Cards */}
-        <View style={styles.featuresContainer}>
-          {featureItems.map((item, index) => (
-            <Link key={index} href={item.href} asChild>
-              <TouchableOpacity
-                style={styles.featureCard}
-                activeOpacity={0.8}>
-                <LinearGradient
-                  colors={[item.color, item.color + 'DD']}
-                  start={{ x: 0, y: 0 }}
-                  end={{ x: 1, y: 0 }}
-                  style={styles.featureCardGradient}>
-                  <View style={styles.featureCardContent}>
-                    <View style={styles.featureTopSection}>
-                      <View style={styles.featureIconContainer}>
-                        {item.name === 'OMR SCANNER' ? (
-                          <Image
-                            source={require('@/assets/images/home/image2.png')}
-                            style={styles.featureIconImage}
-                            contentFit="contain"
-                          />
-                        ) : (
-                          <IconSymbol name={item.icon} size={32} color={ThemeColors.white} />
-                        )}
-                      </View>
-                      <ThemedText style={[styles.featureTitle, { color: ThemeColors.white }]}>
-                        {item.name.toUpperCase()}
-                      </ThemedText>
-                    </View>
-                    <View style={styles.featureArrowButton}>
-                      <IconSymbol name="arrow.right" size={16} color={ThemeColors.white} />
-                    </View>
+          <View style={styles.quickAccessContainer}>
+            {quickAccessItems.map((item, index) => (
+              <Link key={index} href={item.href} asChild>
+                <TouchableOpacity
+                  style={[
+                    styles.quickAccessCard,
+                    styles.cardShadow,
+                    index !== quickAccessItems.length - 1 && styles.quickAccessCardSpacing,
+                  ]}
+                  activeOpacity={0.7}
+                >
+                  <View
+                    style={[
+                      styles.quickAccessIconContainer,
+                      { backgroundColor: item.color + '15' },
+                    ]}
+                  >
+                    <IconSymbol name={item.icon} size={26} color={item.color} />
                   </View>
-                </LinearGradient>
-              </TouchableOpacity>
-            </Link>
-          ))}
-        </View>
-      </ScrollView>
-    </ThemedView>
+
+                  <ThemedText
+                    style={[styles.quickAccessLabel, { color: ThemeColors.grayText }]}
+                    numberOfLines={2}
+                  >
+                    {item.name}
+                  </ThemedText>
+                </TouchableOpacity>
+              </Link>
+            ))}
+          </View>
+
+          <View style={styles.featuresContainer}>
+            {featureItems.map((item, index) => (
+              <Link key={index} href={item.href} asChild>
+                <TouchableOpacity style={styles.featureCard} activeOpacity={0.8}>
+                  <LinearGradient
+                    colors={[item.color, item.color + 'DD']}
+                    start={{ x: 0, y: 0 }}
+                    end={{ x: 1, y: 0 }}
+                    style={styles.featureCardGradient}
+                  >
+                    <View style={styles.featureCardContent}>
+                      <View style={styles.featureTopSection}>
+                        <View style={styles.featureIconContainer}>
+                          <IconSymbol name={item.icon} size={26} color={ThemeColors.white} />
+                        </View>
+
+                        <ThemedText style={[styles.featureTitle, { color: ThemeColors.white }]}>
+                          {item.name.toUpperCase()}
+                        </ThemedText>
+                      </View>
+
+                      <View style={styles.featureArrowButton}>
+                        <IconSymbol name="arrow.right" size={16} color={ThemeColors.white} />
+                      </View>
+                    </View>
+                  </LinearGradient>
+                </TouchableOpacity>
+              </Link>
+            ))}
+          </View>
+        </ScrollView>
+      </ThemedView>
+    </SafeAreaView>
   );
 }
 
-const getResponsiveValue = (small: number, medium: number, large: number, xlarge?: number) => {
+const getResponsiveValue = (
+  small: number,
+  medium: number,
+  large: number,
+  xlarge?: number
+) => {
   if (isDesktop && xlarge !== undefined) return xlarge;
   if (isTablet) return large;
   if (isSmallScreen) return small;
@@ -239,71 +324,73 @@ const getResponsiveValue = (small: number, medium: number, large: number, xlarge
 };
 
 const styles = StyleSheet.create({
+  safeArea: {
+    flex: 1,
+    backgroundColor: ThemeColors.lightNeutral,
+  },
   container: {
     flex: 1,
     backgroundColor: ThemeColors.lightNeutral,
+  },
+  headerWrapper: {
+    backgroundColor: ThemeColors.white,
+    borderBottomLeftRadius: 20,
+    borderBottomRightRadius: 20,
+    ...Platform.select({
+      ios: {
+        shadowColor: '#000',
+        shadowOffset: { width: 0, height: 2 },
+        shadowOpacity: 0.05,
+        shadowRadius: 4,
+      },
+      android: {
+        elevation: 3,
+      },
+    }),
+  },
+  pageContainer: {
+    width: '100%',
+    maxWidth: 1160,
+    alignSelf: 'center',
+    backgroundColor: ThemeColors.lightNeutral,
+    paddingHorizontal: getResponsiveValue(16, 20, 24, 28),
   },
   topHeader: {
     flexDirection: 'row',
     justifyContent: 'space-between',
     alignItems: 'center',
-    paddingTop: Platform.OS === 'ios' 
-      ? getResponsiveValue(50, 60, 70, 80)
-      : getResponsiveValue(40, 50, 60, 70),
-    paddingBottom: getResponsiveValue(12, 16, 20, 24),
-    paddingHorizontal: getResponsiveValue(16, 20, 24, 28),
+    paddingTop: 12,
+    paddingBottom: 10,
+    paddingHorizontal: 12,
     backgroundColor: ThemeColors.white,
-    ...Platform.select({
-      ios: {
-        shadowColor: '#000',
-        shadowOffset: { width: 0, height: 2 },
-        shadowOpacity: 0.05,
-        shadowRadius: 4,
-      },
-      android: {
-        elevation: 3,
-      },
-    }),
   },
   logoSection: {
-    flexDirection: 'row',
-    alignItems: 'center',
-    justifyContent: 'flex-start',
+    flex: 1,
+    justifyContent: 'center',
+    alignItems: 'flex-start',
   },
   profileAvatarContainer: {
     justifyContent: 'center',
     alignItems: 'center',
-    marginLeft: getResponsiveValue(12, 16, 20, 24),
+    marginLeft: 12,
   },
   searchSectionWrapper: {
-    paddingHorizontal: getResponsiveValue(16, 20, 24, 28),
-    paddingBottom: getResponsiveValue(12, 16, 20, 24),
-    paddingTop: getResponsiveValue(12, 14, 16, 18),
+    paddingHorizontal: 16,
+    paddingTop: 2,
+    paddingBottom: 14,
     backgroundColor: ThemeColors.white,
-    ...Platform.select({
-      ios: {
-        shadowColor: '#000',
-        shadowOffset: { width: 0, height: 2 },
-        shadowOpacity: 0.05,
-        shadowRadius: 4,
-      },
-      android: {
-        elevation: 3,
-      },
-    }),
   },
   logoContainer: {
-    width: getResponsiveValue(120, 150, 180, 200),
-    height: getResponsiveValue(120, 80, 180, 200),
-    borderRadius: getResponsiveValue(30, 35, 40, 45),
-    overflow: 'hidden',
+    width: 150,
+    height: 60,
     justifyContent: 'center',
-    alignItems: 'center',
-    marginTop: getResponsiveValue(8, 8, 12, 14),
+    alignItems: 'flex-start',
+    marginLeft: -4,
   },
   logoImage: {
     width: '100%',
     height: '100%',
+    opacity:1,
   },
   appNameContainer: {
     flex: 1,
@@ -320,51 +407,61 @@ const styles = StyleSheet.create({
   searchSection: {
     flexDirection: 'row',
     alignItems: 'center',
-    gap: getResponsiveValue(10, 12, 14, 16),
   },
   searchContainer: {
     flex: 1,
+    height: 46,
     flexDirection: 'row',
     alignItems: 'center',
     backgroundColor: '#F5F5F5',
-    borderRadius: getResponsiveValue(12, 14, 16, 18),
-    paddingHorizontal: getResponsiveValue(12, 14, 16, 18),
-    paddingVertical: getResponsiveValue(10, 12, 14, 16),
-    gap: getResponsiveValue(8, 10, 12, 14),
+    borderRadius: 16,
+    paddingHorizontal: 14,
+    marginRight: 12,
   },
   searchInput: {
     flex: 1,
-    fontSize: getResponsiveValue(14, 16, 18, 20),
+    fontSize: 15,
     color: ThemeColors.grayText,
     padding: 0,
+    marginLeft: 8,
   },
   filterButton: {
-    padding: getResponsiveValue(8, 10, 12, 14),
+    width: 46,
+    height: 46,
+    borderRadius: 16,
+    backgroundColor: '#F5F5F5',
     justifyContent: 'center',
     alignItems: 'center',
   },
   content: {
     flex: 1,
+    width: '100%',
   },
   contentContainer: {
-    paddingBottom: getResponsiveValue(100, 120, 140, 160),
+    maxWidth: 1160,
+    width: '100%',
+    alignSelf: 'center',
+    paddingHorizontal: 16,
+    paddingTop: 12,
+    paddingBottom: 110,
   },
   welcomeBanner: {
-    marginHorizontal: getResponsiveValue(16, 20, 24, 28),
-    marginTop: getResponsiveValue(16, 20, 24, 28),
-    marginBottom: getResponsiveValue(20, 24, 28, 32),
-    borderRadius: getResponsiveValue(20, 24, 28, 32),
+    width: '100%',
+    marginTop: 4,
+    marginBottom: 22,
+    borderRadius: 22,
     overflow: 'hidden',
-    height: getResponsiveValue(200, 220, 240, 260),
+    height: 178,
+    backgroundColor: ThemeColors.white,
     ...Platform.select({
       ios: {
         shadowColor: '#000',
         shadowOffset: { width: 0, height: 4 },
-        shadowOpacity: 0.15,
-        shadowRadius: 12,
+        shadowOpacity: 0.12,
+        shadowRadius: 10,
       },
       android: {
-        elevation: 6,
+        elevation: 5,
       },
     }),
   },
@@ -374,59 +471,63 @@ const styles = StyleSheet.create({
   },
   quickAccessContainer: {
     flexDirection: 'row',
-    paddingHorizontal: getResponsiveValue(16, 20, 24, 28),
-    marginBottom: getResponsiveValue(20, 24, 28, 32),
-    gap: getResponsiveValue(12, 14, 16, 18),
+    alignItems: 'stretch',
+    marginBottom: 22,
+    justifyContent: 'space-between',
   },
   quickAccessCard: {
     flex: 1,
     backgroundColor: ThemeColors.white,
-    borderRadius: getResponsiveValue(16, 18, 20, 22),
-    padding: getResponsiveValue(16, 18, 20, 22),
+    borderRadius: 18,
+    paddingVertical: 20,
+    paddingHorizontal: 10,
     alignItems: 'center',
     justifyContent: 'center',
-    minHeight: getResponsiveValue(100, 110, 120, 130),
+    minHeight: 130,
+  },
+  quickAccessCardSpacing: {
+    marginRight: 16,
   },
   quickAccessIconContainer: {
-    width: getResponsiveValue(56, 64, 72, 80),
-    height: getResponsiveValue(56, 64, 72, 80),
-    borderRadius: getResponsiveValue(16, 18, 20, 22),
+    width: 60,
+    height: 60,
+    borderRadius: 16,
     justifyContent: 'center',
     alignItems: 'center',
-    marginBottom: getResponsiveValue(10, 12, 14, 16),
+    marginBottom: 12,
   },
   quickAccessLabel: {
-    fontSize: getResponsiveValue(12, 14, 16, 18),
+    fontSize: 14,
     fontWeight: '700',
     textAlign: 'center',
+    lineHeight: 20,
   },
   featuresContainer: {
-    paddingHorizontal: getResponsiveValue(16, 20, 24, 28),
-    gap: getResponsiveValue(16, 18, 20, 22),
+    gap: 16,
   },
   featureCard: {
-    borderRadius: getResponsiveValue(20, 22, 24, 24),
+    borderRadius: 22,
     overflow: 'hidden',
     ...Platform.select({
       ios: {
         shadowColor: '#000',
         shadowOffset: { width: 0, height: 4 },
-        shadowOpacity: 0.15,
-        shadowRadius: 12,
+        shadowOpacity: 0.12,
+        shadowRadius: 10,
       },
       android: {
-        elevation: 6,
+        elevation: 5,
       },
     }),
   },
   featureCardGradient: {
-    padding: getResponsiveValue(10, 12, 14, 16),
-    borderRadius: getResponsiveValue(20, 22, 24, 24),
-    minHeight: getResponsiveValue(80, 90, 100, 110),
+    paddingVertical: 14,
+    paddingHorizontal: 16,
+    borderRadius: 22,
+    minHeight: 92,
   },
   featureCardContent: {
-    flexDirection: 'column',
-    minHeight: getResponsiveValue(55, 65, 70, 75),
+    minHeight: 60,
     justifyContent: 'space-between',
   },
   featureTopSection: {
@@ -434,8 +535,8 @@ const styles = StyleSheet.create({
     alignItems: 'center',
   },
   featureIconContainer: {
-    width: getResponsiveValue(40, 44, 48, 52),
-    height: getResponsiveValue(40, 44, 48, 52),
+    width: 36,
+    height: 36,
     justifyContent: 'center',
     alignItems: 'center',
   },
@@ -445,32 +546,32 @@ const styles = StyleSheet.create({
   },
   featureTitle: {
     flex: 1,
-    fontSize: getResponsiveValue(14, 16, 18, 20),
+    fontSize: 15,
     fontWeight: '800',
-    letterSpacing: 1,
-    marginLeft: getResponsiveValue(8, 10, 12, 14),
+    letterSpacing: 0.8,
+    marginLeft: 10,
   },
   featureArrowButton: {
-    minWidth: getResponsiveValue(40, 50, 60, 65),
-    height: getResponsiveValue(28, 32, 36, 40),
+    minWidth: 46,
+    height: 32,
     borderRadius: 999,
     justifyContent: 'center',
     alignItems: 'center',
-    paddingHorizontal: getResponsiveValue(12, 14, 16, 18),
+    paddingHorizontal: 14,
     borderWidth: 1.5,
     borderColor: 'rgba(255, 255, 255, 0.5)',
     backgroundColor: 'transparent',
     alignSelf: 'flex-end',
-    marginTop: 'auto',
+    marginTop: 12,
     ...Platform.select({
       ios: {
         shadowColor: '#000',
         shadowOffset: { width: 0, height: 2 },
-        shadowOpacity: 0.2,
+        shadowOpacity: 0.15,
         shadowRadius: 4,
       },
       android: {
-        elevation: 3,
+        elevation: 2,
       },
     }),
   },

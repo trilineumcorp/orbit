@@ -10,21 +10,17 @@ export default function Index() {
   const router = useRouter();
 
   useEffect(() => {
-    // Safety timeout - always navigate to login after 2 seconds
     const safetyTimeout = setTimeout(() => {
       console.log('Root index: Safety timeout - redirecting to login');
       router.replace('/auth/login');
     }, 2000);
 
-    // Don't navigate while loading
     if (isLoading) {
       return () => clearTimeout(safetyTimeout);
     }
 
-    // Clear safety timeout
     clearTimeout(safetyTimeout);
 
-    // Navigate immediately when not loading
     const navigate = () => {
       try {
         if (!isAuthenticated || !user) {
@@ -46,7 +42,6 @@ export default function Index() {
       }
     };
 
-    // Small delay to ensure router is ready
     const timer = setTimeout(navigate, 50);
 
     return () => {
@@ -71,4 +66,3 @@ const styles = StyleSheet.create({
     alignItems: 'center',
   },
 });
-

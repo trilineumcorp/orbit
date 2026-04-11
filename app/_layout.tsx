@@ -1,14 +1,25 @@
 import { DarkTheme, DefaultTheme, ThemeProvider } from '@react-navigation/native';
-import { Stack, useRouter, useSegments } from 'expo-router';
+import { Stack } from 'expo-router';
 import { StatusBar } from 'expo-status-bar';
 import * as SplashScreen from 'expo-splash-screen';
 import { useEffect, useState } from 'react';
+import { QueryClient, QueryClientProvider } from '@tanstack/react-query';
 import 'react-native-reanimated';
+
+// Initialize React Query Client
+const queryClient = new QueryClient({
+  defaultOptions: {
+    queries: {
+      retry: 2,
+      staleTime: 1000 * 60 * 5, // 5 minutes cache
+    },
+  },
+});
 
 import { ThemeColors } from '@/constants/theme';
 import { useColorScheme } from '@/hooks/use-color-scheme';
 import { initializeMockData } from '@/services/mockData';
-import { AuthProvider, useAuth } from '@/contexts/AuthContext';
+import { AuthProvider } from '@/contexts/AuthContext';
 import { CustomSplashScreen } from '@/components/splash-screen';
 import { ErrorBoundary } from '@/components/error-boundary';
 
@@ -41,7 +52,7 @@ const CustomDarkTheme = {
 
 function RootLayoutNav() {
   const colorScheme = useColorScheme();
-  
+
   // Simplified - let index.tsx handle navigation
   // This component just provides the navigation structure
 
@@ -77,10 +88,12 @@ export default function RootLayout() {
 
     async function prepare() {
       try {
-        // Start mock data initialization in background (non-blocking)
-        initializeMockData().catch((e) => {
-          console.warn('Mock data initialization warning:', e);
-        });
+        // Optional local seed for offline demos only — keep off when using real API data
+        if (process.env.EXPO_PUBLIC_ENABLE_MOCK_SEED === 'true') {
+          initializeMockData().catch((e) => {
+            console.warn('Mock data initialization warning:', e);
+          });
+        }
         
         // Show splash screen for at least 2.5 seconds so users can see it
         await new Promise(resolve => setTimeout(resolve, 2500));
@@ -114,28 +127,24 @@ export default function RootLayout() {
     }
   }, [appIsReady]);
 
-  // Show custom splash screen while app is loading
-  if (!appIsReady) {
-    return (
-      <ErrorBoundary>
-        <CustomSplashScreen />
-      </ErrorBoundary>
-    );
-  }
-
   // If there was an initialization error, still show the app
-  // The error boundary will catch any runtime errors
   if (initError) {
     console.warn('App initialized with error, but continuing:', initError);
   }
 
   return (
-    <ErrorBoundary>
-      <AuthProvider>
-        <ErrorBoundary>
-          <RootLayoutNav />
-        </ErrorBoundary>
-      </AuthProvider>
-    </ErrorBoundary>
+    <QueryClientProvider client={queryClient}>
+      <ErrorBoundary>
+        <AuthProvider>
+          <ErrorBoundary>
+            {!appIsReady ? (
+              <CustomSplashScreen />
+            ) : (
+              <RootLayoutNav />
+            )}
+          </ErrorBoundary>
+        </AuthProvider>
+      </ErrorBoundary>
+    </QueryClientProvider>
   );
 }

@@ -54,7 +54,7 @@ export const examResultService = {
     examTitle: string;
     score: number;
     totalMarks: number;
-    answers: { questionId: string; selectedAnswer: number }[];
+    answers: { questionId: string; selectedAnswer: number; isCorrect?: boolean }[];
   }): Promise<ExamResult | null> => {
     try {
       const response = await apiService.post<ExamResult>('/exam-results', resultData, true);

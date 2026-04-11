@@ -15,9 +15,10 @@ interface PremiumHeaderProps {
     icon: string;
     onPress: () => void;
   };
+  rightComponent?: React.ReactNode;
 }
 
-export function PremiumHeader({ title, subtitle, showBackButton, onBackPress, rightAction }: PremiumHeaderProps) {
+export function PremiumHeader({ title, subtitle, showBackButton, onBackPress, rightAction, rightComponent }: PremiumHeaderProps) {
   const router = useRouter();
 
   const handleBackPress = () => {
@@ -55,16 +56,18 @@ export function PremiumHeader({ title, subtitle, showBackButton, onBackPress, ri
             </ThemedText>
           )}
         </View>
-        {rightAction && (
+        {rightComponent ? (
+          rightComponent
+        ) : rightAction ? (
           <TouchableOpacity
             style={styles.actionButton}
             onPress={rightAction.onPress}
             activeOpacity={0.7}>
             <View style={styles.actionButtonContainer}>
-              <IconSymbol name={rightAction.icon} size={32} color={ThemeColors.orange} />
+              <IconSymbol name={rightAction.icon as any} size={32} color={ThemeColors.orange} />
             </View>
           </TouchableOpacity>
-        )}
+        ) : null}
       </View>
     </LinearGradient>
   );

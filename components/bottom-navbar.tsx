@@ -21,7 +21,7 @@ const studentNavItems: NavItem[] = [
   { name: 'Explore', href: '/explore', icon: 'square.grid.2x2.fill', label: 'Explore' },
   { name: 'Videos', href: '/videos', icon: 'play.rectangle.fill', label: 'Videos' },
   { name: 'Exams', href: '/exams', icon: 'doc.text.fill', label: 'Exams' },
-  { name: 'Reports', href: '/reports', icon: 'chart.bar.fill', label: 'Reports' },
+  { name: 'More', href: '/more', icon: 'ellipsis.circle.fill', label: 'More' },
 ];
 
 const adminNavItems: NavItem[] = [

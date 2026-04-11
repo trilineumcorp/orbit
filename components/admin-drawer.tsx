@@ -74,9 +74,33 @@ export function AdminDrawer({ visible, onClose }: AdminDrawerProps) {
     },
     {
       id: 'reports',
-      label: 'View Reports',
+      label: 'Analytics & reports',
       icon: 'chart.bar.fill',
       route: '/(admin)/reports',
+    },
+    {
+      id: 'moderation',
+      label: 'Moderation',
+      icon: 'shield.fill',
+      route: '/(admin)/moderation',
+    },
+    {
+      id: 'bulk',
+      label: 'Bulk operations',
+      icon: 'arrow.up.doc.fill',
+      route: '/(admin)/bulk-operations',
+    },
+    {
+      id: 'system-settings',
+      label: 'System settings',
+      icon: 'slider.horizontal.3',
+      route: '/(admin)/system-settings',
+    },
+    {
+      id: 'gamification-tools',
+      label: 'Award points',
+      icon: 'trophy.fill',
+      route: '/(admin)/gamification-tools',
     },
     {
       id: 'notifications',

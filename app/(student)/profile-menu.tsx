@@ -99,6 +99,28 @@ export default function ProfileMenuScreen() {
         }
       },
     },
+    ...(user?.role === 'student'
+      ? ([
+          {
+            id: 'gamification',
+            label: 'Points & leaderboard',
+            icon: 'trophy.fill',
+            onPress: () => router.push('/(student)/gamification'),
+          },
+          {
+            id: 'social',
+            label: 'Community',
+            icon: 'bubble.left.and.bubble.right.fill',
+            onPress: () => router.push('/(student)/social'),
+          },
+          {
+            id: 'premium',
+            label: 'Premium & billing',
+            icon: 'creditcard.fill',
+            onPress: () => router.push('/(student)/premium'),
+          },
+        ] as ProfileMenuOption[])
+      : []),
     {
       id: 'settings',
       label: 'Settings',

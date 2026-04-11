@@ -1,0 +1,92 @@
+{
+  "project_info": {
+    "project_number": "114114026636",
+    "project_id": "orbit-app-76267",
+    "storage_bucket": "orbit-app-76267.firebasestorage.app"
+  },
+  "client": [
+    {
+      "client_info": {
+        "mobilesdk_app_id": "1:114114026636:android:cf84dbc9e7253f01ecefa9",
+        "android_client_info": {
+          "package_name": "com.orbit.app"
+        }
+      },
+      "oauth_client": [
+        {
+          "client_id": "114114026636-kpnseh4kmhaeg9d4bmp028j65q6r3j3v.apps.googleusercontent.com",
+          "client_type": 1,
+          "android_info": {
+            "package_name": "com.orbit.app",
+            "certificate_hash": "409a1c38e637dbb3674ad4b1474644efea9729ea"
+          }
+        },
+        {
+          "client_id": "114114026636-ukn3dkh7bh1502aofm1qkh8r87q0c8ji.apps.googleusercontent.com",
+          "client_type": 1,
+          "android_info": {
+            "package_name": "com.orbit.app",
+            "certificate_hash": "5e8f16062ea3cd2c4a0d547876baa6f38cabf625"
+          }
+        },
+        {
+          "client_id": "114114026636-ov99h306qn1u6snufl3stf4dvn9bugj1.apps.googleusercontent.com",
+          "client_type": 3
+        }
+      ],
+      "api_key": [
+        {
+          "current_key": "AIzaSyDChhgDexR6vGEl-rxsfyebB90jTjSpNVE"
+        }
+      ],
+      "services": {
+        "appinvite_service": {
+          "other_platform_oauth_client": [
+            {
+              "client_id": "114114026636-ov99h306qn1u6snufl3stf4dvn9bugj1.apps.googleusercontent.com",
+              "client_type": 3
+            }
+          ]
+        }
+      }
+    },
+    {
+      "client_info": {
+        "mobilesdk_app_id": "1:114114026636:android:abba482d1dff8bbcecefa9",
+        "android_client_info": {
+          "package_name": "com.orbit.com"
+        }
+      },
+      "oauth_client": [
+        {
+          "client_id": "114114026636-792kgng2r5bl57qn43ef7ubo6tgtlmgi.apps.googleusercontent.com",
+          "client_type": 1,
+          "android_info": {
+            "package_name": "com.orbit.com",
+            "certificate_hash": "409a1c38e637dbb3674ad4b1474644efea9729ea"
+          }
+        },
+        {
+          "client_id": "114114026636-ov99h306qn1u6snufl3stf4dvn9bugj1.apps.googleusercontent.com",
+          "client_type": 3
+        }
+      ],
+      "api_key": [
+        {
+          "current_key": "AIzaSyDChhgDexR6vGEl-rxsfyebB90jTjSpNVE"
+        }
+      ],
+      "services": {
+        "appinvite_service": {
+          "other_platform_oauth_client": [
+            {
+              "client_id": "114114026636-ov99h306qn1u6snufl3stf4dvn9bugj1.apps.googleusercontent.com",
+              "client_type": 3
+            }
+          ]
+        }
+      }
+    }
+  ],
+  "configuration_version": "1"
+}

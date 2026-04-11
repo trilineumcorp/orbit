@@ -6,7 +6,7 @@ import { Colors, ThemeColors } from '@/constants/theme';
 import { useColorScheme } from '@/hooks/use-color-scheme';
 import { LinearGradient } from 'expo-linear-gradient';
 import { Link } from 'expo-router';
-import React, { useRef, useEffect, useState } from 'react';
+import React, { useRef, useState } from 'react';
 import {
   Platform,
   ScrollView,
@@ -17,7 +17,6 @@ import {
   Dimensions,
   StatusBar
 } from 'react-native';
-import { BlurView } from 'expo-blur';
 
 const { width } = Dimensions.get('window');
 const CARD_SIZE = (width - 48) / 2;
@@ -63,16 +62,16 @@ export default function ExploreScreen() {
       category: 'Learning',
     },
     {
-      id: 'exams',
-      title: 'Online Exams',
-      icon: 'pencil.circle.fill',
-      gradient: ['#00B894', '#00CEC9'] as const,
-      href: '/exams',
-      badge: { text: 'HOT', color: '#FF7675' },
-      stats: '50+ Tests',
-      bgPattern: '📝',
-      category: 'Assessment',
-    },
+  id: 'activities',
+  title: 'Activities',
+  icon: 'figure.walk.circle.fill',
+  gradient: ['#00B894', '#00CEC9'] as const,
+  href: '/activities',
+  badge: { text: 'HOT', color: '#FF7675' },
+  stats: 'Daily Tasks',
+  bgPattern: '🎯',
+  category: 'Assessment',
+},
     {
       id: 'omr',
       title: 'OMR Scanner',
@@ -129,45 +128,6 @@ export default function ExploreScreen() {
           { useNativeDriver: true }
         )}
         scrollEventThrottle={16}>
-
-        {/* Hero Section */}
-        <View style={styles.heroSection}>
-          <LinearGradient
-            colors={[ThemeColors.deepBlue, '#1B4A6B']}
-            start={{ x: 1, y: 1 }}
-            end={{ x: 4, y: 4 }}
-            style={styles.heroGradient}>
-            <View style={styles.heroContent}>
-              <View style={styles.heroBadge}>
-                <IconSymbol name="star.fill" size={16} color="#FFD700" />
-                <ThemedText style={styles.heroBadgeText}>PREMIUM FEATURES</ThemedText>
-              </View>
-              <ThemedText style={styles.heroTitle}>
-                Master IIT JEE{'\n'}with Confidence
-              </ThemedText>
-              <ThemedText style={styles.heroSubtitle}>
-                Unlock your potential with our comprehensive learning tools
-              </ThemedText>
-
-              <View style={styles.statsContainer}>
-                <View style={styles.statItem}>
-                  <ThemedText style={styles.statNumber}>50+</ThemedText>
-                  <ThemedText style={styles.statLabel}>Video{'\n'}Lectures</ThemedText>
-                </View>
-                <View style={styles.statDivider} />
-                <View style={styles.statItem}>
-                  <ThemedText style={styles.statNumber}>1000+</ThemedText>
-                  <ThemedText style={styles.statLabel}>Practice{'\n'}Questions</ThemedText>
-                </View>
-                <View style={styles.statDivider} />
-                <View style={styles.statItem}>
-                  <ThemedText style={styles.statNumber}>24/7</ThemedText>
-                  <ThemedText style={styles.statLabel}>Doubt{'\n'}Support</ThemedText>
-                </View>
-              </View>
-            </View>
-          </LinearGradient>
-        </View>
 
         {/* Categories */}
         <ScrollView
@@ -399,93 +359,6 @@ const styles = StyleSheet.create({
   contentContainer: {
     paddingTop: 130,
     paddingBottom: 20,
-  },
-  heroSection: {
-    marginHorizontal: 20,
-    marginBottom: 24,
-    borderRadius: 30,
-    overflow: 'hidden',
-    ...Platform.select({
-      ios: {
-        shadowColor: '#000',
-        shadowOffset: { width: 0, height: 10 },
-        shadowOpacity: 0.3,
-        shadowRadius: 20,
-      },
-      android: {
-        elevation: 10,
-      },
-    }),
-  },
-  heroGradient: {
-    padding: 24,
-  },
-  heroContent: {
-    alignItems: 'center',
-  },
-  heroBadge: {
-    flexDirection: 'row',
-    alignItems: 'center',
-    backgroundColor: 'rgba(255,255,255,0.15)',
-    paddingHorizontal: 16,
-    paddingVertical: 8,
-    borderRadius: 30,
-    marginBottom: 20,
-  },
-  heroBadgeText: {
-    color: '#FFF',
-    fontSize: 12,
-    fontWeight: '700',
-    marginLeft: 8,
-    letterSpacing: 0.5,
-  },
-  heroTitle: {
-    fontSize: 32,
-    fontWeight: '800',
-    color: '#FFF',
-    textAlign: 'center',
-    marginBottom: 12,
-    lineHeight: 40,
-    letterSpacing: -0.5,
-  },
-  heroSubtitle: {
-    fontSize: 14,
-    color: 'rgba(255,255,255,0.8)',
-    textAlign: 'center',
-    marginBottom: 24,
-    lineHeight: 20,
-  },
-  statsContainer: {
-    flexDirection: 'row',
-    alignItems: 'center',
-    justifyContent: 'center',
-    backgroundColor: 'rgba(255,255,255,0.1)',
-    borderRadius: 50,
-    padding: 16,
-  },
-  statItem: {
-    alignItems: 'center',
-    justifyContent: 'center',
-    flex: 1,
-  },
-  statNumber: {
-    fontSize: 20,
-    fontWeight: '800',
-    color: '#FFF',
-    marginBottom: 4,
-  },
-  statLabel: {
-    fontSize: 11,
-    color: 'rgba(255,255,255,0.7)',
-    fontWeight: '500',
-    textAlign: 'center',
-    lineHeight: 14,
-  },
-  statDivider: {
-    width: 1,
-    height: 30,
-    backgroundColor: 'rgba(255,255,255,0.2)',
-    marginHorizontal: 8,
   },
   categoriesContainer: {
     maxHeight: 50,

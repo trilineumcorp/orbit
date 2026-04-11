@@ -1,12 +1,27 @@
-import React from 'react';
-import { View, StyleSheet, TouchableOpacity, Platform, Dimensions } from 'react-native';
+import React, { useCallback, useState } from 'react';
+import {
+  View,
+  StyleSheet,
+  TouchableOpacity,
+  Platform,
+  Dimensions,
+  ScrollView,
+  RefreshControl,
+  ActivityIndicator,
+} from 'react-native';
 import { SafeAreaView } from 'react-native-safe-area-context';
 import { useRouter } from 'expo-router';
+import { useFocusEffect } from 'expo-router';
 import { ThemedView } from '@/components/themed-view';
 import { ThemedText } from '@/components/themed-text';
 import { ThemeColors } from '@/constants/theme';
 import { IconSymbol } from '@/components/ui/icon-symbol';
 import { useColorScheme } from '@/hooks/use-color-scheme';
+import {
+  getPlatformAnalytics,
+  getTopContent,
+  getSubjectAnalytics,
+} from '@/services/adminApi';
 
 const { width: screenWidth } = Dimensions.get('window');
 const isTablet = screenWidth >= 768;
@@ -15,29 +30,80 @@ export default function AdminReportsScreen() {
   const router = useRouter();
   const colorScheme = useColorScheme();
   const isDark = colorScheme === 'dark';
+  const [loading, setLoading] = useState(true);
+  const [refreshing, setRefreshing] = useState(false);
+  const [platform, setPlatform] = useState<unknown>(null);
+  const [topContent, setTopContent] = useState<unknown>(null);
+  const [subjects, setSubjects] = useState<unknown>(null);
+
+  const load = async () => {
+    try {
+      const [p, t, s] = await Promise.all([
+        getPlatformAnalytics(),
+        getTopContent(12),
+        getSubjectAnalytics(),
+      ]);
+      setPlatform(p);
+      setTopContent(t);
+      setSubjects(s);
+    } finally {
+      setLoading(false);
+      setRefreshing(false);
+    }
+  };
+
+  useFocusEffect(
+    useCallback(() => {
+      setLoading(true);
+      load();
+    }, [])
+  );
 
   return (
     <SafeAreaView style={styles.safeArea} edges={['top']}>
       <ThemedView style={styles.container}>
-        {/* Header with Back Button */}
         <View style={[styles.header, isDark && styles.headerDark]}>
-        <TouchableOpacity
-          onPress={() => router.push('/(admin)/')}
-          style={styles.backButton}
-          activeOpacity={0.7}
-          hitSlop={{ top: 10, bottom: 10, left: 10, right: 10 }}>
-          <IconSymbol name="chevron.left" size={24} color={isDark ? ThemeColors.lightNeutral : ThemeColors.deepBlue} />
-        </TouchableOpacity>
-        <ThemedText style={styles.headerTitle}>Reports & Analytics</ThemedText>
-        <View style={styles.backButton} />
-      </View>
+          <TouchableOpacity
+            onPress={() => router.push('/(admin)/')}
+            style={styles.backButton}
+            activeOpacity={0.7}
+            hitSlop={{ top: 10, bottom: 10, left: 10, right: 10 }}>
+            <IconSymbol name="chevron.left" size={24} color={isDark ? ThemeColors.lightNeutral : ThemeColors.deepBlue} />
+          </TouchableOpacity>
+          <ThemedText style={styles.headerTitle}>Analytics</ThemedText>
+          <View style={styles.backButton} />
+        </View>
 
-      <View style={styles.content}>
-        <ThemedText style={styles.title}>Reports & Analytics</ThemedText>
-        <ThemedText style={styles.subtitle}>
-          Reports and analytics features coming soon...
-        </ThemedText>
-      </View>
+        <ScrollView
+          contentContainerStyle={styles.scroll}
+          refreshControl={<RefreshControl refreshing={refreshing} onRefresh={() => { setRefreshing(true); load(); }} />}>
+          {loading ? (
+            <ActivityIndicator size="large" color={ThemeColors.orange} style={{ marginTop: 40 }} />
+          ) : (
+            <>
+              <ThemedText style={styles.sectionTitle}>Platform (last 30 days)</ThemedText>
+              <ThemedView style={[styles.card, isDark && styles.cardDark]}>
+                <ThemedText style={styles.mono}>
+                  {platform != null ? JSON.stringify(platform, null, 2) : 'No data'}
+                </ThemedText>
+              </ThemedView>
+
+              <ThemedText style={styles.sectionTitle}>Top content</ThemedText>
+              <ThemedView style={[styles.card, isDark && styles.cardDark]}>
+                <ThemedText style={styles.mono}>
+                  {topContent != null ? JSON.stringify(topContent, null, 2) : 'No data'}
+                </ThemedText>
+              </ThemedView>
+
+              <ThemedText style={styles.sectionTitle}>By subject</ThemedText>
+              <ThemedView style={[styles.card, isDark && styles.cardDark]}>
+                <ThemedText style={styles.mono}>
+                  {subjects != null ? JSON.stringify(subjects, null, 2) : 'No data'}
+                </ThemedText>
+              </ThemedView>
+            </>
+          )}
+        </ScrollView>
       </ThemedView>
     </SafeAreaView>
   );
@@ -58,50 +124,42 @@ const styles = StyleSheet.create({
     paddingTop: Platform.OS === 'ios' ? (isTablet ? 20 : 16) : (isTablet ? 16 : 12),
     paddingBottom: 16,
     paddingHorizontal: 16,
-    backgroundColor: '#FFFFFF',
-    ...Platform.select({
-      ios: {
-        shadowColor: '#000',
-        shadowOffset: { width: 0, height: 2 },
-        shadowOpacity: 0.1,
-        shadowRadius: 4,
-      },
-      android: {
-        elevation: 4,
-      },
-    }),
+    borderBottomWidth: StyleSheet.hairlineWidth,
+    borderBottomColor: '#E0E0E0',
   },
   headerDark: {
-    backgroundColor: '#1A3D4D',
+    borderBottomColor: '#2A4D5D',
   },
   backButton: {
     width: 40,
     height: 40,
     justifyContent: 'center',
-    alignItems: 'center',
-    borderRadius: 20,
   },
   headerTitle: {
-    fontSize: isTablet ? 24 : 20,
+    fontSize: 18,
     fontWeight: '700',
-    flex: 1,
-    textAlign: 'center',
   },
-  content: {
-    flex: 1,
-    justifyContent: 'center',
-    alignItems: 'center',
-    padding: 20,
+  scroll: {
+    padding: 16,
+    paddingBottom: 40,
   },
-  title: {
-    fontSize: 24,
-    fontWeight: 'bold',
-    marginBottom: 8,
-  },
-  subtitle: {
+  sectionTitle: {
     fontSize: 16,
-    opacity: 0.7,
-    textAlign: 'center',
+    fontWeight: '700',
+    marginBottom: 8,
+    marginTop: 8,
+  },
+  card: {
+    padding: 12,
+    borderRadius: 12,
+    backgroundColor: '#F5F5F5',
+    marginBottom: 16,
+  },
+  cardDark: {
+    backgroundColor: '#1A3D4D',
+  },
+  mono: {
+    fontSize: 11,
+    fontFamily: Platform.OS === 'ios' ? 'Menlo' : 'monospace',
   },
 });
-

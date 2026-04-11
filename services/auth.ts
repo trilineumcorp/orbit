@@ -53,7 +53,6 @@ export const register = async (
   }
 };
 
-// Login
 export const login = async (email: string, password: string): Promise<User> => {
   try {
     const response = await apiService.post<{
@@ -86,6 +85,7 @@ export const login = async (email: string, password: string): Promise<User> => {
     throw new Error(error.message || 'Invalid email or password. Please try again.');
   }
 };
+
 
 // Logout
 export const logout = async (): Promise<void> => {

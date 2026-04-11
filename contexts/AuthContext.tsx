@@ -1,6 +1,7 @@
 import React, { createContext, useContext, useEffect, useState, ReactNode } from 'react';
 import { User, UserRole, AuthState } from '@/types';
 import * as authService from '@/services/auth';
+import { registerForPushNotificationsAsync, sendPushTokenToBackend } from '@/services/notifications';
 
 interface AuthContextType extends AuthState {
   login: (email: string, password: string) => Promise<User>;
@@ -23,7 +24,7 @@ export const AuthProvider: React.FC<{ children: ReactNode }> = ({ children }) =>
 
   useEffect(() => {
     checkAuth();
-    
+
     // Safety timeout - always stop loading after 3 seconds
     const safetyTimeout = setTimeout(() => {
       console.warn('AuthContext: Safety timeout - stopping loading state');
@@ -33,17 +34,28 @@ export const AuthProvider: React.FC<{ children: ReactNode }> = ({ children }) =>
     return () => clearTimeout(safetyTimeout);
   }, []);
 
+  // Register for push notifications when user is authenticated
+  useEffect(() => {
+    if (user) {
+      registerForPushNotificationsAsync().then(token => {
+        if (token) {
+          sendPushTokenToBackend(token);
+        }
+      });
+    }
+  }, [user]);
+
   const checkAuth = async () => {
     try {
       // Add timeout to prevent hanging - reduced to 2 seconds
       const authPromise = authService.getCurrentUser();
-      const timeoutPromise = new Promise<User | null>((resolve) => 
+      const timeoutPromise = new Promise<User | null>((resolve) =>
         setTimeout(() => {
           console.warn('AuthContext: Auth check timeout - continuing without user');
           resolve(null);
         }, 2000)
       );
-      
+
       const currentUser = await Promise.race([authPromise, timeoutPromise]);
       setUser(currentUser);
     } catch (error) {
@@ -60,25 +72,25 @@ export const AuthProvider: React.FC<{ children: ReactNode }> = ({ children }) =>
       console.log('AuthContext: Starting login for:', email);
       const loggedInUser = await authService.login(email, password);
       console.log('AuthContext: Login service returned:', loggedInUser);
-      
+
       if (loggedInUser) {
         setUser(loggedInUser);
         console.log('AuthContext: User state set to:', loggedInUser);
-        
+
         // Verify the user was stored correctly
         await new Promise(resolve => setTimeout(resolve, 100)); // Small delay for AsyncStorage
         const verifyUser = await authService.getCurrentUser();
         console.log('AuthContext: Verified user from storage:', verifyUser);
-        
+
         if (!verifyUser) {
           throw new Error('Failed to save login session');
         }
-        
+
         // Ensure state is updated
         if (verifyUser.id !== loggedInUser.id) {
           setUser(verifyUser);
         }
-        
+
         return verifyUser;
       } else {
         throw new Error('Login failed - no user returned');

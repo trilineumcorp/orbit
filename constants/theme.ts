@@ -7,7 +7,7 @@ import { Platform } from 'react-native';
 
 // Theme Colors - Matching topscore Logo
 export const ThemeColors = {
-  orange: '#FF6B35',        // Primary orange from logo circle
+  orange: '#1E2F44',        // Primary orange from logo circle
   deepBlue: '#0B3C5D',      // Dark blue from topscore logo
   lightNeutral: '#FAFAFA',
   grayText: '#424242',

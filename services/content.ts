@@ -58,6 +58,38 @@ export interface ExamQuestion {
 }
 
 // Video API
+export interface PaginatedVideos {
+  videos: Video[];
+  nextPage?: number;
+  totalPages: number;
+}
+
+export const getInfiniteVideos = async (standard?: number, subject?: string, page: number = 1, limit: number = 10): Promise<PaginatedVideos> => {
+  try {
+    let url = '/videos';
+    const params: string[] = [`page=${page}`, `limit=${limit}`];
+    if (standard) params.push(`standard=${standard}`);
+    if (subject) params.push(`subject=${encodeURIComponent(subject)}`);
+    url += `?${params.join('&')}`;
+    
+    const response = await apiService.get<any>(url, false);
+    if (response.success && response.data) {
+      const videos = response.data.map((v: any) => ({ ...v, id: v._id || v.id }));
+      const pagination = response.pagination;
+      return {
+        videos,
+        nextPage: pagination?.page && pagination?.pages && pagination.page < pagination.pages 
+          ? pagination.page + 1 
+          : undefined,
+        totalPages: pagination?.pages || 1,
+      };
+    }
+    return { videos: [], totalPages: 0 };
+  } catch (error) {
+    console.error('Error fetching infinite videos:', error);
+    throw error;
+  }
+};
 export const getVideos = async (standard?: number, subject?: string): Promise<Video[]> => {
   try {
     let url = '/videos';

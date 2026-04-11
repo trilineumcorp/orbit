@@ -1,28 +1,25 @@
 {
   "expo": {
-    "name": "topscore",
-    "slug": "topscore",
+    "name": "orbit",
+    "slug": "orbit",
     "version": "1.0.0",
     "orientation": "portrait",
-
     "icon": "./assets/images/logo.png",
-
-    "scheme": "topscore",
+    "scheme": "orbit",
     "userInterfaceStyle": "automatic",
     "associatedDomains": [],
-
     "ios": {
       "supportsTablet": true,
-      "bundleIdentifier": "com.trilineum.topscore",
+      "bundleIdentifier": "com.orbit.app",
       "splash": {
         "image": "./assets/images/logo.png",
         "resizeMode": "contain",
         "backgroundColor": "#ffffff"
       }
     },
-
     "android": {
-      "package": "com.trilineum.topscore",
+      "package": "com.orbit.app",
+      "googleServicesFile": "./google-services.json",
       "adaptiveIcon": {
         "foregroundImage": "./assets/images/logo.png",
         "backgroundColor": "#FF6B35"
@@ -33,7 +30,6 @@
         "backgroundColor": "#ffffff"
       }
     },
-
     "plugins": [
       [
         "expo-splash-screen",
@@ -55,7 +51,8 @@
         {
           "cameraPermission": "Allow $(PRODUCT_NAME) to access your camera to scan OMR sheets."
         }
-      ]
+      ],
+      "expo-notifications"
     ]
   }
 }

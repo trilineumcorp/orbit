@@ -8,6 +8,14 @@ import { OpaqueColorValue, type StyleProp, type TextStyle } from 'react-native';
 type IconMapping = Record<SymbolViewProps['name'], ComponentProps<typeof MaterialIcons>['name']>;
 type IconSymbolName = keyof typeof MAPPING;
 
+type IconSymbolProps = {
+  name: IconSymbolName | string;
+  size?: number;
+  color: string | OpaqueColorValue;
+  style?: StyleProp<TextStyle>;
+  weight?: SymbolWeight;
+};
+
 /**
  * Add your SF Symbols to Material Icons mappings here.
  * - see Material Icons in the [Icons Directory](https://icons.expo.fyi).
@@ -64,13 +72,11 @@ const MAPPING = {
   'eye.slash.fill': 'visibility-off',
   'line.3.horizontal.decrease.circle': 'filter-list',
   'exclamationmark.triangle.fill': 'warning',
-  'xmark.circle.fill': 'cancel',
   'bell.slash.fill': 'notifications-off',
   'phone.fill': 'phone',
   'message.fill': 'message',
   'moon.fill': 'dark-mode',
   'lock.shield.fill': 'security',
-  'chevron.right': 'chevron-right',
   'hand.raised.fill': 'pan-tool',
   'pencil': 'edit',
   'pencil.fill': 'edit',
@@ -78,6 +84,29 @@ const MAPPING = {
   'trash.fill': 'delete',
   'number': 'looks-one',
   'graduationcap.fill': 'school',
+  // More menu & common screens (Android Material fallback)
+  'trophy.fill': 'emoji-events',
+  'bubble.left.and.bubble.right.fill': 'forum',
+  'creditcard.fill': 'credit-card',
+  'puzzlepiece.extension.fill': 'extension',
+  'bookmark.fill': 'bookmark',
+  'ellipsis.circle.fill': 'more-horiz',
+  'shield.fill': 'shield',
+  'arrow.up.doc.fill': 'description',
+  'crown.fill': 'stars',
+  'doc.text.magnifyingglass': 'find-in-page',
+  'list.bullet.rectangle': 'view-list',
+  'clock': 'schedule',
+  'star': 'star',
+  'chart.bar': 'bar-chart',
+  'heart.fill': 'favorite',
+  'calendar.fill': 'calendar-today',
+  'chart.line.uptrend.xyaxis.fill': 'trending-up',
+  'tray.fill': 'inbox',
+  'arrow.up.arrow.down': 'swap-vert',
+  'arrow.up': 'arrow-upward',
+  'arrow.clockwise': 'refresh',
+  'exclamationmark.triangle': 'warning',
 } as IconMapping;
 
 /**
@@ -90,12 +119,7 @@ export function IconSymbol({
   size = 24,
   color,
   style,
-}: {
-  name: IconSymbolName;
-  size?: number;
-  color: string | OpaqueColorValue;
-  style?: StyleProp<TextStyle>;
-  weight?: SymbolWeight;
-}) {
-  return <MaterialIcons color={color} size={size} name={MAPPING[name]} style={style} />;
+}: IconSymbolProps) {
+  const iconName = MAPPING[name as IconSymbolName] || 'help';
+  return <MaterialIcons color={color} size={size} name={iconName} style={style} />;
 }

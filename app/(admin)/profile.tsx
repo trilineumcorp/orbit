@@ -108,9 +108,9 @@ export default function AdminProfileScreen() {
           {/* Profile Section */}
           <View style={styles.profileSection}>
             <Avatar
-              name={user?.name}
+              name={user?.name ?? user?.email ?? 'Admin'}
               email={user?.email}
-              avatarUrl={user?.avatarUrl}
+              avatarUrl={user?.avatarUrl ?? null}
               size="xlarge"
               showBorder={true}
             />

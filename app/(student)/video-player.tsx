@@ -4,10 +4,14 @@ import { ThemedView } from '@/components/themed-view';
 import { IconSymbol } from '@/components/ui/icon-symbol';
 import { ThemeColors } from '@/constants/theme';
 import { extractYouTubeId } from '@/utils/youtube';
+import { checkWatchLater, toggleWatchLater } from '@/services/storage';
 import { useLocalSearchParams, useRouter } from 'expo-router';
 import React, { useEffect, useRef, useState } from 'react';
-import { ActivityIndicator, Alert, Dimensions, StyleSheet, View, Platform, TouchableOpacity, Linking } from 'react-native';
+import { ActivityIndicator, Alert, Dimensions, StyleSheet, View, Platform, TouchableOpacity, Linking, TextInput, FlatList, KeyboardAvoidingView } from 'react-native';
 import { WebView } from 'react-native-webview';
+import { io, Socket } from 'socket.io-client';
+import { useAuth } from '@/contexts/AuthContext';
+import { apiService } from '@/services/api';
 
 const { width: screenWidth, height: screenHeight } = Dimensions.get('window');
 const isTablet = screenWidth >= 768;
@@ -20,13 +24,21 @@ export default function VideoPlayerScreen() {
   const [error, setError] = useState<string | null>(null);
   const [retryCount, setRetryCount] = useState(0);
   const [hasReceivedLoadSignal, setHasReceivedLoadSignal] = useState(false);
+  const [isBookmarked, setIsBookmarked] = useState(false);
   const webViewRef = useRef<WebView>(null);
   const loadTimeoutRef = useRef<NodeJS.Timeout | null>(null);
   
+  const { user } = useAuth();
+  const [messages, setMessages] = useState<any[]>([]);
+  const [chatInput, setChatInput] = useState('');
+  const socketRef = useRef<Socket | null>(null);
+  const [startAt, setStartAt] = useState(0);
+  const progressIntervalRef = useRef<NodeJS.Timeout | null>(null);
+  
   const fromExplore = params.from === 'explore';
-
-  const videoId = extractYouTubeId(params.url as string);
-  const youtubeUrl = params.url as string;
+  const contentId = (params.id || params.videoId) as string;
+  const youtubeUrl = (params.url as string) || '';
+  const videoId = youtubeUrl ? extractYouTubeId(youtubeUrl) : null;
   
   // Use youtube-nocookie.com by default (more reliable for embeds, privacy-friendly)
   // Try different embed URL formats based on retry count
@@ -37,28 +49,88 @@ export default function VideoPlayerScreen() {
     // Strategy: Try nocookie first (most reliable), then regular youtube, then with different params
     // All attempts include proper referrer policy to prevent Error 153
     if (attempt === 0) {
-      // First attempt: youtube-nocookie.com with minimal params (most reliable)
-      return `https://www.youtube-nocookie.com/embed/${videoId}?playsinline=1&rel=0&modestbranding=1&controls=1&origin=${encodeURIComponent('https://www.youtube.com')}`;
+      return `https://www.youtube-nocookie.com/embed/${videoId}?playsinline=1&rel=0&start=${startAt}&modestbranding=1&controls=1&origin=${encodeURIComponent('https://www.youtube.com')}`;
     } else if (attempt === 1) {
-      // Second attempt: regular youtube.com with minimal params
-      return `https://www.youtube.com/embed/${videoId}?playsinline=1&rel=0&modestbranding=1&controls=1&origin=${encodeURIComponent('https://www.youtube.com')}`;
+      return `https://www.youtube.com/embed/${videoId}?playsinline=1&rel=0&start=${startAt}&modestbranding=1&controls=1&origin=${encodeURIComponent('https://www.youtube.com')}`;
     } else if (attempt === 2) {
-      // Third attempt: nocookie with autoplay
-      return `https://www.youtube-nocookie.com/embed/${videoId}?autoplay=1&playsinline=1&rel=0&modestbranding=1&controls=1&origin=${encodeURIComponent('https://www.youtube.com')}`;
+      return `https://www.youtube-nocookie.com/embed/${videoId}?autoplay=1&playsinline=1&start=${startAt}&rel=0&modestbranding=1&controls=1&origin=${encodeURIComponent('https://www.youtube.com')}`;
     } else {
-      // Final attempt: regular youtube with autoplay
-      return `https://www.youtube.com/embed/${videoId}?autoplay=1&playsinline=1&rel=0&modestbranding=1&controls=1&origin=${encodeURIComponent('https://www.youtube.com')}`;
+      return `https://www.youtube.com/embed/${videoId}?autoplay=1&playsinline=1&start=${startAt}&rel=0&modestbranding=1&controls=1&origin=${encodeURIComponent('https://www.youtube.com')}`;
     }
   };
   
   const embedUrl = getEmbedUrl(retryCount);
 
   useEffect(() => {
-    if (!videoId) {
+    if (!youtubeUrl || !videoId) {
       Alert.alert('Error', 'Invalid video URL');
       router.back();
+    } else {
+      checkWatchLater(videoId).then(setIsBookmarked).catch(console.error);
+      
+      // Fetch progress
+      if (contentId) {
+        apiService.get<any>(`/videos/${contentId}/progress`).then(res => {
+          if (res.success && res.data?.lastWatchedTimestamp) {
+            setStartAt(res.data.lastWatchedTimestamp);
+          }
+        }).catch(err => console.log('No previous progress', err));
+      }
     }
-  }, [videoId, router]);
+  }, [videoId, youtubeUrl, router, contentId]);
+
+  useEffect(() => {
+    if (!contentId) return;
+    
+    // Setup Socket.io
+    const apiUrl = process.env.EXPO_PUBLIC_API_URL || 'http://10.0.2.2:3000/api';
+    const socketUrl = apiUrl.replace('/api', '');
+    
+    socketRef.current = io(socketUrl);
+    socketRef.current.emit('joinVideo', contentId);
+    
+    socketRef.current.on('newMessage', (msg) => {
+      setMessages(prev => [...prev, msg]);
+    });
+    
+    // Setup progress saving interval
+    progressIntervalRef.current = setInterval(() => {
+      // Periodic ping to save "active" status or we could rely on WebView reporting time
+      // For simplicity, we just save a baseline complete status after 60s
+      setStartAt(prev => {
+        const nextTime = prev + 10;
+        apiService.put(`/videos/${contentId}/progress`, { lastWatchedTimestamp: nextTime, completed: false })
+          .catch(console.error);
+        return nextTime;
+      });
+    }, 10000); // 10s increments
+    
+    return () => {
+      socketRef.current?.disconnect();
+      if (progressIntervalRef.current) clearInterval(progressIntervalRef.current);
+    };
+  }, [contentId]);
+
+  const sendMessage = () => {
+    if (!chatInput.trim() || !contentId) return;
+    socketRef.current?.emit('sendMessage', {
+      videoId: contentId,
+      studentId: user?.id,
+      message: chatInput
+    });
+    setChatInput('');
+  };
+
+  const handleToggleBookmark = async () => {
+    if (videoId) {
+      try {
+        const newState = await toggleWatchLater(videoId);
+        setIsBookmarked(newState);
+      } catch (err) {
+        console.error('Failed to bookmark', err);
+      }
+    }
+  };
 
   // Set up loading timeout - only if we haven't received load signals
   useEffect(() => {
@@ -212,7 +284,7 @@ export default function VideoPlayerScreen() {
             // Also check for YouTube error page structure
             var errorElements = document.querySelectorAll('[class*="error"], [id*="error"], [class*="unavailable"]');
             if (errorElements.length > 0 && bodyText.toLowerCase().indexOf('youtube') !== -1) {
-              if (!errorDetected && bodyText.length < 500) { // Error pages are usually short
+              if (!errorDetected && bodyText.length < 500) {
                 errorDetected = true;
                 notifyReactNative('YOUTUBE_ERROR_153');
                 return true;
@@ -225,13 +297,11 @@ export default function VideoPlayerScreen() {
           function checkIframeLoad() {
             var iframe = document.getElementById('youtube-player');
             if (iframe) {
-              // Check for errors first
               if (detectYouTubeError()) {
                 return;
               }
               
               try {
-                // Try to access iframe content to check if it loaded
                 var iframeDoc = iframe.contentDocument || iframe.contentWindow.document;
                 if (iframeDoc && iframeDoc.readyState === 'complete') {
                   if (!iframeLoaded && !errorDetected) {
@@ -240,8 +310,6 @@ export default function VideoPlayerScreen() {
                   }
                 }
               } catch (e) {
-                // Cross-origin - can't access, but iframe might still be loading
-                // Check for errors in the main document
                 if (detectYouTubeError()) {
                   return;
                 }
@@ -250,7 +318,6 @@ export default function VideoPlayerScreen() {
                   loadAttempts++;
                   setTimeout(checkIframeLoad, 2000);
                 } else if (!iframeLoaded && !errorDetected) {
-                  // Assume loaded after max attempts if no error detected
                   iframeLoaded = true;
                   notifyReactNative('IFRAME_LOADED');
                 }
@@ -258,7 +325,6 @@ export default function VideoPlayerScreen() {
             }
           }
           
-          // Handle fullscreen requests from iframe
           window.addEventListener('message', function(event) {
             if (event.data === 'requestFullscreen' || event.data === 'enterFullscreen' || 
                 (event.data && event.data.type === 'fullscreen')) {
@@ -266,12 +332,10 @@ export default function VideoPlayerScreen() {
             }
           });
           
-          // Monitor iframe load
           window.addEventListener('load', function() {
             var iframe = document.getElementById('youtube-player');
             if (iframe) {
               iframe.addEventListener('load', function() {
-                // Delay error check to allow iframe to render
                 setTimeout(function() {
                   if (!detectYouTubeError()) {
                     notifyReactNative('IFRAME_LOADED');
@@ -280,14 +344,12 @@ export default function VideoPlayerScreen() {
                 }, 2000);
               });
               
-              // Also check periodically for errors and load status
               setTimeout(checkIframeLoad, 2000);
               setTimeout(checkIframeLoad, 4000);
               setTimeout(checkIframeLoad, 6000);
             }
           });
           
-          // Periodic error checking - more frequent for faster detection
           var errorCheckInterval = setInterval(function() {
             if (!iframeLoaded && !errorDetected) {
               detectYouTubeError();
@@ -296,12 +358,10 @@ export default function VideoPlayerScreen() {
             }
           }, 1000);
           
-          // Also check immediately on load
           setTimeout(function() {
             detectYouTubeError();
           }, 3000);
           
-          // Notify when page is ready
           if (document.readyState === 'complete') {
             notifyReactNative('PAGE_READY');
           } else {
@@ -335,12 +395,9 @@ export default function VideoPlayerScreen() {
 
   const handleLoadEnd = () => {
     console.log('WebView load ended');
-    // Give it more time for the iframe to load - YouTube embeds can take time
-    // Only hide if we haven't received a load signal yet
     setTimeout(() => {
       if (loading && !hasReceivedLoadSignal) {
         console.log('Hiding loader after load end timeout (no signal received)');
-        // Don't set error, just hide loading - video might still be loading
         setLoading(false);
       }
     }, 6000);
@@ -361,16 +418,13 @@ export default function VideoPlayerScreen() {
       if (message === 'FULLSCREEN_REQUESTED') {
         handleFullscreen();
       } else if (message === 'YOUTUBE_ERROR_153') {
-        // YouTube Error 153 detected - video player configuration error
         console.log('YouTube Error 153 detected, retry count:', retryCount);
         
-        // Clear the timeout
         if (loadTimeoutRef.current) {
           clearTimeout(loadTimeoutRef.current);
           loadTimeoutRef.current = null;
         }
         
-        // Automatically try next embed URL if we haven't exhausted all attempts
         if (retryCount < 4) {
           console.log('Auto-retrying with different embed URL...');
           setTimeout(() => {
@@ -379,22 +433,18 @@ export default function VideoPlayerScreen() {
             setLoading(true);
             setHasReceivedLoadSignal(false);
             
-            // Reload the WebView with different embed URL
             if (webViewRef.current) {
               webViewRef.current.reload();
             }
           }, 500);
         } else {
-          // All attempts exhausted, show error with specific Error 153 message
           setError('Video player configuration error (Error 153). This video cannot be embedded due to security restrictions. Please watch on YouTube.');
           setLoading(false);
           setHasReceivedLoadSignal(true);
         }
       } else if (message === 'IFRAME_LOADED' || message === 'PAGE_READY') {
-        // Iframe or page loaded successfully - cancel timeout and hide loading
         console.log('Video loaded successfully');
         
-        // Clear the timeout since we got a success signal
         if (loadTimeoutRef.current) {
           clearTimeout(loadTimeoutRef.current);
           loadTimeoutRef.current = null;
@@ -418,21 +468,17 @@ export default function VideoPlayerScreen() {
       setLoading(true);
       setHasReceivedLoadSignal(false);
       
-      // Clear any existing timeout
       if (loadTimeoutRef.current) {
         clearTimeout(loadTimeoutRef.current);
         loadTimeoutRef.current = null;
       }
       
-      // Small delay before reload to ensure state is updated
       setTimeout(() => {
-        // Reload the WebView with potentially different embed URL
         if (webViewRef.current) {
           webViewRef.current.reload();
         }
       }, 100);
     } else {
-      // After 4 retries, just open YouTube
       handleFullscreen();
     }
   };
@@ -443,6 +489,15 @@ export default function VideoPlayerScreen() {
         title={params.title as string || 'Video Player'}
         showBackButton={true}
         onBackPress={fromExplore ? () => router.push('/explore') : undefined}
+        rightComponent={
+          <TouchableOpacity onPress={handleToggleBookmark} style={{ padding: 4 }}>
+            <IconSymbol 
+              name={isBookmarked ? "bookmark.fill" : "bookmark"} 
+              size={24} 
+              color={isBookmarked ? ThemeColors.orange : ThemeColors.white} 
+            />
+          </TouchableOpacity>
+        }
       />
       
       <View style={styles.playerContainer}>
@@ -462,7 +517,6 @@ export default function VideoPlayerScreen() {
           mixedContentMode="always"
           allowsInlineMediaPlayback={true}
           androidLayerType="hardware"
-          androidHardwareAccelerationDisabled={false}
           cacheEnabled={true}
           incognito={false}
           thirdPartyCookiesEnabled={true}
@@ -483,15 +537,12 @@ export default function VideoPlayerScreen() {
             </View>
           )}
           onShouldStartLoadWithRequest={(request) => {
-            // Allow YouTube embed URLs and necessary resources
             const url = request.url;
             
-            // Allow about:blank and data URLs
             if (url === 'about:blank' || url.startsWith('data:')) {
               return true;
             }
             
-            // Allow YouTube embed URLs and related resources (including nocookie domain)
             if (url.includes('youtube.com/embed') || 
                 url.includes('youtube-nocookie.com/embed') ||
                 url.includes('youtube.com/api') ||
@@ -506,7 +557,6 @@ export default function VideoPlayerScreen() {
               return true;
             }
             
-            // If user tries to navigate to YouTube watch page, redirect to YouTube app/browser
             if (url.includes('youtube.com/watch') || 
                 url.includes('youtu.be/') || 
                 url.includes('youtube.com/channel') ||
@@ -516,14 +566,12 @@ export default function VideoPlayerScreen() {
               return false;
             }
             
-            // Allow other necessary resources
             return true;
           }}
           onError={(syntheticEvent) => {
             const { nativeEvent } = syntheticEvent;
             console.error('WebView error: ', nativeEvent);
             setError('Failed to load video. Please try again.');
-            // Don't hide loading immediately on error, give it time to recover
             setTimeout(() => {
               setLoading(false);
             }, 2000);
@@ -531,8 +579,6 @@ export default function VideoPlayerScreen() {
           onHttpError={(syntheticEvent) => {
             const { nativeEvent } = syntheticEvent;
             console.error('WebView HTTP error: ', nativeEvent);
-            // Some HTTP errors are expected (like 204), don't treat as fatal
-            // Only show error for client errors (4xx) that aren't expected
             if (nativeEvent.statusCode >= 400 && nativeEvent.statusCode < 500 && nativeEvent.statusCode !== 204) {
               setError('Video unavailable. Please try watching on YouTube.');
               setTimeout(() => {
@@ -590,7 +636,6 @@ export default function VideoPlayerScreen() {
           </View>
         )}
 
-        {/* Fullscreen Button Overlay - Only show when video is loaded */}
         {!loading && !error && (
           <TouchableOpacity
             style={styles.fullscreenButton}
@@ -610,6 +655,38 @@ export default function VideoPlayerScreen() {
           <ThemedText style={styles.descriptionText}>{params.description as string}</ThemedText>
         </View>
       )}
+
+      <KeyboardAvoidingView 
+        style={styles.chatContainer} 
+        behavior={Platform.OS === 'ios' ? 'padding' : undefined}>
+        <View style={styles.chatHeader}>
+          <ThemedText style={styles.chatTitle}>Live Discussion</ThemedText>
+        </View>
+        <FlatList
+          data={messages}
+          keyExtractor={(item, index) => index.toString()}
+          renderItem={({ item }) => (
+            <View style={styles.chatBubble}>
+              <ThemedText style={styles.chatMessage}>{item.message}</ThemedText>
+            </View>
+          )}
+          contentContainerStyle={styles.chatListContent}
+          inverted={false}
+        />
+        <View style={styles.chatInputContainer}>
+          <TextInput
+            style={styles.chatInput}
+            placeholder="Ask a question..."
+            placeholderTextColor="#8E8E93"
+            value={chatInput}
+            onChangeText={setChatInput}
+            onSubmitEditing={sendMessage}
+          />
+          <TouchableOpacity onPress={sendMessage} style={styles.sendButton}>
+            <IconSymbol name="paperplane.fill" size={20} color={ThemeColors.white} />
+          </TouchableOpacity>
+        </View>
+      </KeyboardAvoidingView>
     </ThemedView>
   );
 }
@@ -794,5 +871,61 @@ const styles = StyleSheet.create({
     fontSize: 16,
     fontWeight: '700',
   },
+  chatContainer: {
+    flex: 1,
+    backgroundColor: '#1A1A1A',
+    marginTop: 8,
+  },
+  chatHeader: {
+    padding: 16,
+    borderBottomWidth: 1,
+    borderBottomColor: '#333',
+  },
+  chatTitle: {
+    fontSize: 18,
+    fontWeight: '700',
+    color: ThemeColors.lightNeutral,
+  },
+  chatListContent: {
+    padding: 16,
+    gap: 12,
+  },
+  chatBubble: {
+    backgroundColor: '#333',
+    padding: 12,
+    borderRadius: 16,
+    borderBottomLeftRadius: 4,
+    alignSelf: 'flex-start',
+    maxWidth: '85%',
+  },
+  chatMessage: {
+    color: ThemeColors.white,
+    fontSize: 14,
+  },
+  chatInputContainer: {
+    flexDirection: 'row',
+    padding: 16,
+    backgroundColor: '#222',
+    borderTopWidth: 1,
+    borderTopColor: '#333',
+    alignItems: 'center',
+    gap: 12,
+  },
+  chatInput: {
+    flex: 1,
+    backgroundColor: '#333',
+    borderRadius: 20,
+    paddingHorizontal: 16,
+    paddingVertical: 10,
+    color: ThemeColors.white,
+    fontSize: 14,
+  },
+  sendButton: {
+    width: 40,
+    height: 40,
+    borderRadius: 20,
+    backgroundColor: ThemeColors.orange,
+    justifyContent: 'center',
+    alignItems: 'center',
+  },
 });
-

@@ -4,15 +4,15 @@ import { ThemedView } from '@/components/themed-view';
 import { IconSymbol } from '@/components/ui/icon-symbol';
 import { Colors, ThemeColors } from '@/constants/theme';
 import { useColorScheme } from '@/hooks/use-color-scheme';
-import { getVideos, Video } from '@/services/content';
-import { getYouTubeThumbnail } from '@/utils/youtube';
+import { getInfiniteVideos, Video } from '@/services/content';
+import { useInfiniteQuery } from '@tanstack/react-query';
+import { getYouTubeThumbnail, extractYouTubeId } from '@/utils/youtube';
 import { Image } from 'expo-image';
 import { LinearGradient } from 'expo-linear-gradient';
 import { Link, useLocalSearchParams, useRouter } from 'expo-router';
-import React, { useEffect, useState } from 'react';
+import React, { useState } from 'react';
 import { ActivityIndicator, Platform, ScrollView, StyleSheet, TextInput, TouchableOpacity, View } from 'react-native';
 import { VideoSkeleton } from '@/components/skeleton';
-import { detectNetworkSpeed, getMinLoadingTime } from '@/utils/network';
 import { useAuth } from '@/contexts/AuthContext';
 import Animated, { FadeInDown, FadeInUp } from 'react-native-reanimated';
 
@@ -23,61 +23,48 @@ export default function VideosScreen() {
   const router = useRouter();
   const params = useLocalSearchParams();
   const { user } = useAuth();
-  const [videos, setVideos] = useState<Video[]>([]);
   const [searchQuery, setSearchQuery] = useState('');
-  const [loading, setLoading] = useState(true);
   const [selectedSubject, setSelectedSubject] = useState<string | null>(null);
   const [isSearchFocused, setIsSearchFocused] = useState(false);
 
   const fromExplore = params.from === 'explore';
-
-  // Get user's standard from class field
   const userStandard = user?.class ? parseInt(user.class, 10) : undefined;
 
-  useEffect(() => {
-    loadVideos();
-  }, [userStandard]);
+  // When selectedSubject is set, standard filter must not block subject exploration.
+  // For full 1-12 coverage we avoid hard-snapping to userStandard.
+  const standardForFetch = selectedSubject ? undefined : undefined; // all standards by default
 
-  const loadVideos = async () => {
-    try {
-      setLoading(true);
-      let minLoadingTime = 300; // Default minimum loading time
+  const {
+    data,
+    fetchNextPage,
+    hasNextPage,
+    isFetchingNextPage,
+    isLoading: loading,
+  } = useInfiniteQuery({
+    queryKey: ['videos', standardForFetch, selectedSubject],
+    queryFn: ({ pageParam = 1 }) =>
+      getInfiniteVideos(standardForFetch, selectedSubject || undefined, pageParam, 12),
+    getNextPageParam: (lastPage) => lastPage.nextPage,
+    initialPageParam: 1,
+  });
 
-      try {
-        const networkSpeed = await detectNetworkSpeed();
-        minLoadingTime = getMinLoadingTime(networkSpeed);
-      } catch (networkError) {
-        console.warn('Network speed detection failed, using default:', networkError);
-      }
+  const videos = data ? data.pages.flatMap(page => page.videos) : [];
 
-      const startTime = Date.now();
-      // Filter videos by user's standard if available
-      const loadedVideos = await getVideos(userStandard);
-      const elapsedTime = Date.now() - startTime;
-
-      // Ensure minimum loading time for better UX
-      if (elapsedTime < minLoadingTime) {
-        await new Promise(resolve => setTimeout(resolve, minLoadingTime - elapsedTime));
-      }
-
-      setVideos(loadedVideos);
-    } catch (error: any) {
-      console.error('Failed to load videos:', error);
-      setVideos([]); // Set empty array on error
-    } finally {
-      setLoading(false);
-    }
+  const isCloseToBottom = ({ layoutMeasurement, contentOffset, contentSize }: any) => {
+    const paddingToBottom = 150;
+    return layoutMeasurement.height + contentOffset.y >= contentSize.height - paddingToBottom;
   };
 
   const filteredVideos = videos.filter(video => {
-    const matchesSearch = video.title.toLowerCase().includes(searchQuery.toLowerCase());
-    const matchesSubject = !selectedSubject || video.subject === selectedSubject;
+    const title = video?.title || '';
+    const subject = video?.subject || '';
+    const matchesSearch = title.toLowerCase().includes(searchQuery.toLowerCase());
+    const matchesSubject = !selectedSubject || subject === selectedSubject;
     return matchesSearch && matchesSubject;
   });
 
-  // Group videos by subject
   const videosBySubject = SUBJECTS.reduce((acc, subject) => {
-    const subjectVideos = videos.filter(v => v.subject === subject);
+    const subjectVideos = videos.filter(v => v?.subject === subject);
     if (subjectVideos.length > 0) {
       acc[subject] = subjectVideos;
     }
@@ -97,7 +84,15 @@ export default function VideosScreen() {
       <ScrollView
         style={styles.videoList}
         contentContainerStyle={styles.videoListContent}
-        showsVerticalScrollIndicator={false}>
+        showsVerticalScrollIndicator={false}
+        scrollEventThrottle={16}
+        onScroll={({ nativeEvent }) => {
+          if (isCloseToBottom(nativeEvent)) {
+            if (hasNextPage && !isFetchingNextPage) {
+              fetchNextPage();
+            }
+          }
+        }}>
 
         <Animated.View entering={FadeInUp.duration(600).springify()}>
           <ThemedView style={[styles.welcomeCard, { backgroundColor: colors.card }]}>
@@ -171,7 +166,6 @@ export default function VideosScreen() {
             <VideoSkeleton count={6} />
           </View>
         ) : selectedSubject ? (
-          // Show videos for selected subject
           filteredVideos.length === 0 ? (
             <Animated.View entering={FadeInUp.duration(600)} style={styles.emptyContainer}>
               <View style={[styles.emptyIconContainer, { backgroundColor: ThemeColors.orange + '10' }]}>
@@ -186,78 +180,101 @@ export default function VideosScreen() {
             </Animated.View>
           ) : (
             <View style={styles.videoGrid}>
-              {filteredVideos.map((video, index) => (
-                <Animated.View
-                  key={video._id || video.id}
-                  entering={FadeInDown.duration(400).delay(index * 100).springify()}>
-                  <Link
-                    href={{
-                      pathname: '/video-player',
-                      params: {
-                        videoId: video._id || video.id || '',
-                        title: video.title,
-                        url: video.youtubeUrl,
-                        ...(fromExplore && { from: 'explore' }),
-                      },
-                    }}
-                    asChild>
-                    <TouchableOpacity
-                      style={[styles.videoCard, { backgroundColor: colors.card }]}
-                      activeOpacity={0.85}>
-                      <View style={styles.thumbnailContainer}>
-                        <Image
-                          source={{ uri: getYouTubeThumbnail(video.youtubeUrl) }}
-                          style={styles.thumbnail}
-                          contentFit="cover"
-                          placeholder={{ blurhash: 'L6PZfSi_.AyE_3t7t7R**0o#DgR4' }}
-                          transition={200}
-                        />
-                        <LinearGradient
-                          colors={['transparent', 'rgba(0,0,0,0.3)']}
-                          style={styles.thumbnailGradient}
-                        />
-                        <View style={styles.playOverlay}>
-                          <View style={styles.playIconContainer}>
-                            <LinearGradient
-                              colors={[ThemeColors.orange, ThemeColors.deepBlue]}
-                              start={{ x: 0, y: 0 }}
-                              end={{ x: 1, y: 1 }}
-                              style={styles.playIconGradient}>
-                              <IconSymbol name="play.fill" size={20} color={ThemeColors.white} />
-                            </LinearGradient>
+              {filteredVideos.map((video, index) => {
+                const videoUrl = video?.youtubeUrl || '';
+                const safeVideoId = extractYouTubeId(videoUrl);
+                const thumbnailUrl = getYouTubeThumbnail(videoUrl);
+
+                return (
+                  <Animated.View
+                    key={video._id || video.id || `${video.title}-${index}`}
+                    entering={FadeInDown.duration(400).delay(index * 100).springify()}>
+                    <Link
+                      href={{
+                        pathname: '/video-player',
+                        params: {
+                          id: video._id || video.id || '',
+                          title: video.title || 'Video Player',
+                          url: videoUrl,
+                          description: video.description || '',
+                          ...(fromExplore && { from: 'explore' }),
+                        },
+                      }}
+                      asChild>
+                      <TouchableOpacity
+                        style={[styles.videoCard, { backgroundColor: colors.card }]}
+                        activeOpacity={0.85}
+                        disabled={!videoUrl || !safeVideoId}>
+                        <View style={styles.thumbnailContainer}>
+                          {thumbnailUrl ? (
+                            <Image
+                              source={{ uri: thumbnailUrl }}
+                              style={styles.thumbnail}
+                              contentFit="cover"
+                              placeholder={{ blurhash: 'L6PZfSi_.AyE_3t7t7R**0o#DgR4' }}
+                              transition={200}
+                            />
+                          ) : (
+                            <View style={[styles.thumbnail, styles.thumbnailFallback]}>
+                              <IconSymbol name="play.slash" size={28} color={ThemeColors.white} />
+                            </View>
+                          )}
+                          <LinearGradient
+                            colors={['transparent', 'rgba(0,0,0,0.3)']}
+                            style={styles.thumbnailGradient}
+                          />
+                          <View style={styles.playOverlay}>
+                            <View style={styles.playIconContainer}>
+                              <LinearGradient
+                                colors={[ThemeColors.orange, ThemeColors.deepBlue]}
+                                start={{ x: 0, y: 0 }}
+                                end={{ x: 1, y: 1 }}
+                                style={styles.playIconGradient}>
+                                <IconSymbol name="play.fill" size={20} color={ThemeColors.white} />
+                              </LinearGradient>
+                            </View>
+                          </View>
+                          <View style={styles.durationBadge}>
+                            <IconSymbol name="clock" size={10} color={ThemeColors.white} />
+                            <ThemedText style={styles.durationText}>12:34</ThemedText>
                           </View>
                         </View>
-                        <View style={styles.durationBadge}>
-                          <IconSymbol name="clock" size={10} color={ThemeColors.white} />
-                          <ThemedText style={styles.durationText}>12:34</ThemedText>
-                        </View>
-                      </View>
-                      <View style={styles.videoInfo}>
-                        <View style={styles.subjectTag}>
-                          <View style={[styles.subjectDot, { backgroundColor: ThemeColors.orange }]} />
-                          <ThemedText style={styles.subjectTagText}>{video.subject}</ThemedText>
-                        </View>
-                        <ThemedText type="defaultSemiBold" numberOfLines={2} style={styles.videoTitle}>
-                          {video.title}
-                        </ThemedText>
-                        {video.description ? (
-                          <ThemedText style={styles.description} numberOfLines={2}>
-                            {video.description}
+
+                        <View style={styles.videoInfo}>
+                          <View style={styles.subjectTag}>
+                            <View style={[styles.subjectDot, { backgroundColor: ThemeColors.orange }]} />
+                            <ThemedText style={styles.subjectTagText}>{video.subject || 'General'}</ThemedText>
+                          </View>
+
+                          <ThemedText type="defaultSemiBold" numberOfLines={2} style={styles.videoTitle}>
+                            {video.title || 'Untitled Video'}
                           </ThemedText>
-                        ) : null}
-                        <View style={styles.videoMeta}>
-                          <IconSymbol name="eye" size={12} color={colors.icon} />
-                          <ThemedText style={styles.viewCount}>1.2k views</ThemedText>
+
+                          {video.description ? (
+                            <ThemedText style={styles.description} numberOfLines={2}>
+                              {video.description}
+                            </ThemedText>
+                          ) : null}
+
+                          {!videoUrl && (
+                            <ThemedText style={styles.invalidVideoText}>
+                              Video URL not available
+                            </ThemedText>
+                          )}
+
+                          <View style={styles.videoMeta}>
+                            <IconSymbol name="eye" size={12} color={colors.icon} />
+                            <ThemedText style={styles.viewCount}>1.2k views</ThemedText>
+                          </View>
                         </View>
-                      </View>
-                    </TouchableOpacity>
-                  </Link>
-                </Animated.View>
-              ))}
+                      </TouchableOpacity>
+                    </Link>
+                  </Animated.View>
+                );
+              })}
             </View>
           )
         ) : (
-          // Show subject folders
           Object.keys(videosBySubject).length === 0 ? (
             <Animated.View entering={FadeInUp.duration(600)} style={styles.emptyContainer}>
               <View style={[styles.emptyIconContainer, { backgroundColor: ThemeColors.orange + '10' }]}>
@@ -275,6 +292,7 @@ export default function VideosScreen() {
               {SUBJECTS.map((subject, index) => {
                 const subjectVideos = videosBySubject[subject] || [];
                 if (subjectVideos.length === 0) return null;
+
                 return (
                   <Animated.View
                     key={subject}
@@ -315,6 +333,12 @@ export default function VideosScreen() {
             </View>
           )
         )}
+
+        {isFetchingNextPage && (
+          <View style={{ paddingVertical: 20, alignItems: 'center' }}>
+            <ActivityIndicator size="small" color={ThemeColors.orange} />
+          </View>
+        )}
       </ScrollView>
     </ThemedView>
   );
@@ -323,17 +347,6 @@ export default function VideosScreen() {
 const styles = StyleSheet.create({
   container: {
     flex: 1,
-  },
-  loader: {
-    flex: 1,
-    justifyContent: 'center',
-    alignItems: 'center',
-    paddingVertical: 60,
-  },
-  loadingText: {
-    marginTop: 16,
-    fontSize: 16,
-    opacity: 0.7,
   },
   searchInput: {
     flex: 1,
@@ -457,6 +470,11 @@ const styles = StyleSheet.create({
     width: '100%',
     height: '100%',
   },
+  thumbnailFallback: {
+    justifyContent: 'center',
+    alignItems: 'center',
+    backgroundColor: ThemeColors.deepBlue,
+  },
   thumbnailGradient: {
     position: 'absolute',
     bottom: 0,
@@ -561,6 +579,12 @@ const styles = StyleSheet.create({
     opacity: 0.7,
     fontWeight: '500',
     marginBottom: 12,
+  },
+  invalidVideoText: {
+    fontSize: 12,
+    color: '#CC6666',
+    marginBottom: 10,
+    fontWeight: '600',
   },
   videoMeta: {
     flexDirection: 'row',

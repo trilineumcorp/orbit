@@ -5,50 +5,131 @@ import { IconSymbol } from '@/components/ui/icon-symbol';
 import { Colors, ThemeColors } from '@/constants/theme';
 import { useColorScheme } from '@/hooks/use-color-scheme';
 import { getExamResults } from '@/services/storage';
+import { examResultService } from '@/services/exam-results';
 import { ExamResult } from '@/types';
+import { detectNetworkSpeed, getMinLoadingTime } from '@/utils/network';
+import * as Haptics from 'expo-haptics';
 import { LinearGradient } from 'expo-linear-gradient';
 import { useLocalSearchParams, useRouter } from 'expo-router';
-import React, { useEffect, useState } from 'react';
-import { Dimensions, Platform, ScrollView, StyleSheet, TouchableOpacity, View, Animated } from 'react-native';
+import React, { useEffect, useMemo, useRef, useState } from 'react';
+import {
+  Animated,
+  Dimensions,
+  Easing,
+  Platform,
+  StyleSheet,
+  TouchableOpacity,
+  View,
+} from 'react-native';
 import { LineChart } from 'react-native-chart-kit';
-import { ListSkeleton } from '@/components/skeleton';
-import { detectNetworkSpeed, getMinLoadingTime } from '@/utils/network';
+
+type ReportExamResult = ExamResult & {
+  correctAnswers?: number;
+  totalQuestions?: number;
+  timeSpent?: number;
+};
 
 export default function ReportsScreen() {
   const colorScheme = useColorScheme();
   const router = useRouter();
   const params = useLocalSearchParams();
-  const [examResults, setExamResults] = useState<ExamResult[]>([]);
+
+  const [examResults, setExamResults] = useState<ReportExamResult[]>([]);
   const [selectedPeriod, setSelectedPeriod] = useState<'all' | 'month' | 'week'>('all');
   const [loading, setLoading] = useState(true);
   const [selectedMetric, setSelectedMetric] = useState<'score' | 'time' | 'accuracy'>('score');
-  
+
+  const fadeAnim = useRef(new Animated.Value(0)).current;
+  const scaleAnim = useRef(new Animated.Value(0.95)).current;
+  const slideAnim = useRef(new Animated.Value(30)).current;
+  const metricCardAnims = useRef<Animated.Value[]>([
+    new Animated.Value(0),
+    new Animated.Value(0),
+    new Animated.Value(0),
+    new Animated.Value(0),
+  ]).current;
+
   const fromExplore = params.from === 'explore';
+  const screenWidth = Dimensions.get('window').width;
+  const themeColors = Colors[colorScheme ?? 'light'];
 
   useEffect(() => {
     loadReports();
   }, []);
 
+  useEffect(() => {
+    if (!loading) {
+      Animated.parallel([
+        Animated.timing(fadeAnim, {
+          toValue: 1,
+          duration: 600,
+          useNativeDriver: true,
+          easing: Easing.out(Easing.cubic),
+        }),
+        Animated.spring(scaleAnim, {
+          toValue: 1,
+          friction: 8,
+          tension: 40,
+          useNativeDriver: true,
+        }),
+        Animated.timing(slideAnim, {
+          toValue: 0,
+          duration: 500,
+          useNativeDriver: true,
+          easing: Easing.out(Easing.cubic),
+        }),
+      ]).start();
+
+      metricCardAnims.forEach((anim, index) => {
+        anim.setValue(0);
+        Animated.spring(anim, {
+          toValue: 1,
+          delay: 100 + index * 50,
+          friction: 7,
+          tension: 50,
+          useNativeDriver: true,
+        }).start();
+      });
+    }
+  }, [loading, fadeAnim, scaleAnim, slideAnim, metricCardAnims]);
+
   const loadReports = async () => {
     try {
       setLoading(true);
+
       let minLoadingTime = 300;
-      
+
       try {
         const networkSpeed = await detectNetworkSpeed();
         minLoadingTime = getMinLoadingTime(networkSpeed);
       } catch (networkError) {
         console.warn('Network speed detection failed, using default:', networkError);
       }
-      
+
       const startTime = Date.now();
-      const results = await getExamResults();
+      const [localResults, remoteResults] = await Promise.all([
+        getExamResults() as Promise<ReportExamResult[]>,
+        examResultService.getAllResults().catch(() => [] as ReportExamResult[]),
+      ]);
+      const merged = new Map<string, ReportExamResult>();
+      const add = (r: ReportExamResult) => {
+        const key = `${r.examId}_${new Date(r.completedAt).getTime()}`;
+        const prev = merged.get(key);
+        if (!prev || new Date(r.completedAt) >= new Date(prev.completedAt)) {
+          merged.set(key, r);
+        }
+      };
+      localResults.forEach(add);
+      remoteResults.forEach(add);
+      const results = Array.from(merged.values()).sort(
+        (a, b) => new Date(b.completedAt).getTime() - new Date(a.completedAt).getTime()
+      );
       const elapsedTime = Date.now() - startTime;
-      
+
       if (elapsedTime < minLoadingTime) {
-        await new Promise(resolve => setTimeout(resolve, minLoadingTime - elapsedTime));
+        await new Promise((resolve) => setTimeout(resolve, minLoadingTime - elapsedTime));
       }
-      
+
       setExamResults(results);
     } catch (error) {
       console.error('Failed to load reports:', error);
@@ -58,106 +139,237 @@ export default function ReportsScreen() {
     }
   };
 
-  const filteredResults = examResults.filter(result => {
-    const resultDate = new Date(result.completedAt);
-    const now = new Date();
-    if (selectedPeriod === 'week') {
-      const weekAgo = new Date(now.getTime() - 7 * 24 * 60 * 60 * 1000);
-      return resultDate >= weekAgo;
-    }
-    if (selectedPeriod === 'month') {
-      const monthAgo = new Date(now.getTime() - 30 * 24 * 60 * 60 * 1000);
-      return resultDate >= monthAgo;
-    }
-    return true;
-  });
+  const handlePeriodChange = (period: 'all' | 'month' | 'week') => {
+    Haptics.impactAsync(Haptics.ImpactFeedbackStyle.Light);
+    setSelectedPeriod(period);
+  };
 
-  // Calculate comprehensive stats
+  const handleMetricChange = (metric: 'score' | 'time' | 'accuracy') => {
+    Haptics.impactAsync(Haptics.ImpactFeedbackStyle.Light);
+    setSelectedMetric(metric);
+  };
+
+  const filteredResults = useMemo(() => {
+    return examResults.filter((result) => {
+      const resultDate = new Date(result.completedAt);
+      const now = new Date();
+
+      if (selectedPeriod === 'week') {
+        const weekAgo = new Date(now.getTime() - 7 * 24 * 60 * 60 * 1000);
+        return resultDate >= weekAgo;
+      }
+
+      if (selectedPeriod === 'month') {
+        const monthAgo = new Date(now.getTime() - 30 * 24 * 60 * 60 * 1000);
+        return resultDate >= monthAgo;
+      }
+
+      return true;
+    });
+  }, [examResults, selectedPeriod]);
+
   const totalExams = filteredResults.length;
-  const averageScore = totalExams > 0
-    ? filteredResults.reduce((sum, r) => sum + r.percentage, 0) / totalExams
-    : 0;
-  const highestScore = totalExams > 0
-    ? Math.max(...filteredResults.map(r => r.percentage))
-    : 0;
-  const lowestScore = totalExams > 0
-    ? Math.min(...filteredResults.map(r => r.percentage))
-    : 0;
-  const totalTimeSpent = filteredResults.reduce((sum, r) => sum + (r.timeSpent || 0), 0);
-  const averageAccuracy = totalExams > 0
-    ? filteredResults.reduce((sum, r) => sum + ((r.correctAnswers / r.totalQuestions) * 100), 0) / totalExams
-    : 0;
 
-  // Calculate trend (comparing last 3 exams with previous ones)
+  const averageScore =
+    totalExams > 0
+      ? filteredResults.reduce((sum, r) => sum + r.percentage, 0) / totalExams
+      : 0;
+
+  const highestScore =
+    totalExams > 0 ? Math.max(...filteredResults.map((r) => r.percentage)) : 0;
+
+  const lowestScore =
+    totalExams > 0 ? Math.min(...filteredResults.map((r) => r.percentage)) : 0;
+
+  const totalTimeSpent = filteredResults.reduce((sum, r) => sum + (r.timeSpent ?? 0), 0);
+
+  const averageAccuracy =
+    totalExams > 0
+      ? filteredResults.reduce((sum, r) => {
+          const totalQuestions = r.totalQuestions ?? 0;
+          const correctAnswers = r.correctAnswers ?? 0;
+          const accuracy = totalQuestions > 0 ? (correctAnswers / totalQuestions) * 100 : 0;
+          return sum + accuracy;
+        }, 0) / totalExams
+      : 0;
+
   const recentResults = filteredResults.slice(-3);
   const previousResults = filteredResults.slice(-6, -3);
-  const recentAvg = recentResults.reduce((sum, r) => sum + r.percentage, 0) / (recentResults.length || 1);
-  const previousAvg = previousResults.reduce((sum, r) => sum + r.percentage, 0) / (previousResults.length || 1);
+
+  const recentAvg =
+    recentResults.reduce((sum, r) => sum + r.percentage, 0) / (recentResults.length || 1);
+
+  const previousAvg =
+    previousResults.reduce((sum, r) => sum + r.percentage, 0) / (previousResults.length || 1);
+
   const trend = recentAvg - previousAvg;
-  const trendIcon = trend > 0 ? 'arrow.up.right' : trend < 0 ? 'arrow.down.right' : 'arrow.right';
-  const trendColor = trend > 0 ? '#4CAF50' : trend < 0 ? '#F44336' : '#FFA000';
+  const trendIcon =
+    trend > 0 ? 'arrow.up.right' : trend < 0 ? 'arrow.down.right' : 'arrow.right';
 
-  const colors = Colors[colorScheme ?? 'light'];
-  const screenWidth = Dimensions.get('window').width;
+  const MetricCard = ({
+    icon,
+    value,
+    label,
+    change,
+    color,
+    index,
+  }: {
+    icon: any;
+    value: string;
+    label: string;
+    change?: number;
+    color: string;
+    index: number;
+  }) => (
+    <Animated.View
+      style={[
+        styles.metricCard,
+        {
+          backgroundColor: themeColors.card,
+          transform: [{ scale: metricCardAnims[index] }],
+          opacity: metricCardAnims[index],
+        },
+      ]}>
+      <LinearGradient
+        colors={[`${color}10`, 'transparent']}
+        style={styles.metricGradient}
+        start={{ x: 0, y: 0 }}
+        end={{ x: 1, y: 1 }}
+      />
 
-  const MetricCard = ({ icon, value, label, change, color }: any) => (
-    <ThemedView style={[styles.metricCard, { backgroundColor: colors.card }]}>
       <View style={styles.metricHeader}>
-        <View style={[styles.metricIconContainer, { backgroundColor: color + '15' }]}>
-          <IconSymbol name={icon} size={20} color={color} />
+        <View style={[styles.metricIconContainer, { backgroundColor: `${color}15` }]}>
+          <IconSymbol name={icon} size={22} color={color} />
         </View>
+
         {change !== undefined && (
-          <View style={[styles.metricChange, { backgroundColor: change >= 0 ? '#4CAF5015' : '#F4433615' }]}>
-            <IconSymbol 
-              name={change >= 0 ? 'arrow.up' : 'arrow.down'} 
-              size={12} 
-              color={change >= 0 ? '#4CAF50' : '#F44336'} 
+          <View
+            style={[
+              styles.metricChange,
+              {
+                backgroundColor: change >= 0 ? '#4CAF5015' : '#F4433615',
+              },
+            ]}>
+            <IconSymbol
+              name={change >= 0 ? 'arrow.up' : 'arrow.down'}
+              size={12}
+              color={change >= 0 ? '#4CAF50' : '#F44336'}
             />
-            <ThemedText style={[styles.metricChangeText, { color: change >= 0 ? '#4CAF50' : '#F44336' }]}>
-              {Math.abs(change)}%
+            <ThemedText
+              style={[
+                styles.metricChangeText,
+                { color: change >= 0 ? '#4CAF50' : '#F44336' },
+              ]}>
+              {Math.abs(change).toFixed(1)}%
             </ThemedText>
           </View>
         )}
       </View>
-      <ThemedText style={styles.metricValue}>{value}</ThemedText>
+
+      <Animated.Text style={[styles.metricValue, { color: themeColors.text }]}>
+        {value}
+      </Animated.Text>
+
       <ThemedText style={styles.metricLabel}>{label}</ThemedText>
-    </ThemedView>
+    </Animated.View>
   );
 
-  const InsightBadge = ({ type, text }: { type: 'success' | 'warning' | 'info'; text: string }) => {
-    const colors = {
-      success: { bg: '#4CAF5015', text: '#4CAF50', icon: 'checkmark.circle.fill' },
-      warning: { bg: '#FFA00015', text: '#FFA000', icon: 'exclamationmark.triangle.fill' },
-      info: { bg: '#2196F315', text: '#2196F3', icon: 'info.circle.fill' }
+  const InsightBadge = ({
+    type,
+    text,
+  }: {
+    type: 'success' | 'warning' | 'info';
+    text: string;
+  }) => {
+    const badgeColors = {
+      success: {
+        bg: '#4CAF5015',
+        text: '#4CAF50',
+        icon: 'checkmark.circle.fill',
+        gradient: ['#4CAF50', '#45a049'] as [string, string],
+      },
+      warning: {
+        bg: '#FFA00015',
+        text: '#FFA000',
+        icon: 'exclamationmark.triangle.fill',
+        gradient: ['#FFA000', '#FF8C00'] as [string, string],
+      },
+      info: {
+        bg: '#2196F315',
+        text: '#2196F3',
+        icon: 'info.circle.fill',
+        gradient: ['#2196F3', '#1976D2'] as [string, string],
+      },
     };
+
     return (
-      <View style={[styles.insightBadge, { backgroundColor: colors[type].bg }]}>
-        <IconSymbol name={colors[type].icon as any} size={14} color={colors[type].text} />
-        <ThemedText style={[styles.insightText, { color: colors[type].text }]}>{text}</ThemedText>
+      <View style={[styles.insightBadge, { backgroundColor: badgeColors[type].bg }]}>
+        <LinearGradient
+          colors={badgeColors[type].gradient}
+          style={styles.insightGradient}
+          start={{ x: 0, y: 0 }}
+          end={{ x: 1, y: 1 }}
+        />
+        <IconSymbol name={badgeColors[type].icon as any} size={14} color={badgeColors[type].text} />
+        <ThemedText style={[styles.insightText, { color: badgeColors[type].text }]}>
+          {text}
+        </ThemedText>
       </View>
     );
   };
 
+  if (loading) {
+    return (
+      <ThemedView style={styles.container}>
+        <PremiumHeader
+          title="Analytics"
+          showBackButton={true}
+          onBackPress={fromExplore ? () => router.push('/explore') : undefined}
+        />
+        <View style={styles.loadingContainer}>
+          <View style={styles.loadingSpinner}>
+            <LinearGradient
+              colors={[ThemeColors.orange, ThemeColors.deepBlue]}
+              style={styles.loadingGradient}
+              start={{ x: 0, y: 0 }}
+              end={{ x: 1, y: 1 }}
+            />
+          </View>
+          <ThemedText style={styles.loadingText}>Loading your analytics...</ThemedText>
+        </View>
+      </ThemedView>
+    );
+  }
+
   return (
     <ThemedView style={styles.container}>
-      <PremiumHeader 
-        title="Analytics" 
+      <PremiumHeader
+        title="Analytics"
         showBackButton={true}
         onBackPress={fromExplore ? () => router.push('/explore') : undefined}
       />
 
-      <ScrollView 
-        style={styles.content} 
+      <Animated.ScrollView
+        style={[styles.content, { opacity: fadeAnim }]}
         contentContainerStyle={styles.contentContainer}
-        showsVerticalScrollIndicator={false}>
-        
-        {/* Header Section */}
-        <View style={styles.headerSection}>
+        showsVerticalScrollIndicator={false}
+        bounces={true}>
+        <Animated.View
+          style={[
+            styles.headerSection,
+            {
+              transform: [{ translateY: slideAnim }],
+              opacity: fadeAnim,
+            },
+          ]}>
           <View>
-            <ThemedText style={styles.greeting}>Your Performance</ThemedText>
+            <ThemedText style={styles.greeting}>✨ Your Performance</ThemedText>
             <ThemedText style={styles.title}>Learning Analytics</ThemedText>
           </View>
-          <TouchableOpacity style={styles.profileButton}>
+
+          <TouchableOpacity
+            style={styles.profileButton}
+            onPress={() => Haptics.impactAsync(Haptics.ImpactFeedbackStyle.Light)}>
             <LinearGradient
               colors={[ThemeColors.orange, ThemeColors.deepBlue]}
               start={{ x: 0, y: 0 }}
@@ -166,279 +378,408 @@ export default function ReportsScreen() {
               <IconSymbol name="person.fill" size={20} color="#FFFFFF" />
             </LinearGradient>
           </TouchableOpacity>
-        </View>
+        </Animated.View>
 
-        {/* Period Selector */}
-        <View style={styles.periodContainer}>
-          {(['week', 'month', 'all'] as const).map(period => (
+        <Animated.View
+          style={[
+            styles.periodContainer,
+            { opacity: fadeAnim, transform: [{ translateY: slideAnim }] },
+          ]}>
+          {(['week', 'month', 'all'] as const).map((period) => (
             <TouchableOpacity
               key={period}
               style={[
                 styles.periodChip,
                 selectedPeriod === period && styles.periodChipActive,
-                { backgroundColor: selectedPeriod === period ? ThemeColors.orange : colors.card }
+                {
+                  backgroundColor:
+                    selectedPeriod === period ? ThemeColors.orange : themeColors.card,
+                },
               ]}
-              onPress={() => setSelectedPeriod(period)}>
-              <ThemedText style={[
-                styles.periodChipText,
-                { color: selectedPeriod === period ? '#FFFFFF' : colors.text }
-              ]}>
-                {period === 'all' ? 'All Time' : period.charAt(0).toUpperCase() + period.slice(1)}
+              onPress={() => handlePeriodChange(period)}
+              activeOpacity={0.8}>
+              <ThemedText
+                style={[
+                  styles.periodChipText,
+                  { color: selectedPeriod === period ? '#FFFFFF' : themeColors.text },
+                ]}>
+                {period === 'all'
+                  ? 'All Time'
+                  : period.charAt(0).toUpperCase() + period.slice(1)}
               </ThemedText>
             </TouchableOpacity>
           ))}
-        </View>
+        </Animated.View>
 
-        {/* Main Stats Card */}
-        <LinearGradient
-          colors={['#667EEA', '#764BA2']}
-          start={{ x: 0, y: 0 }}
-          end={{ x: 1, y: 1 }}
-          style={styles.mainStatsCard}>
-          <View style={styles.mainStatsHeader}>
-            <ThemedText style={styles.mainStatsTitle}>Overall Performance</ThemedText>
-            <View style={styles.trendContainer}>
-              <IconSymbol name={trendIcon as any} size={16} color="#FFFFFF" />
-              <ThemedText style={styles.trendText}>
-                {trend > 0 ? '+' : ''}{trend.toFixed(1)}% vs last period
-              </ThemedText>
-            </View>
-          </View>
-          
-          <View style={styles.mainStatsGrid}>
-            <View style={styles.mainStatItem}>
-              <ThemedText style={styles.mainStatValue}>{totalExams}</ThemedText>
-              <ThemedText style={styles.mainStatLabel}>Exams</ThemedText>
-            </View>
-            <View style={styles.mainStatDivider} />
-            <View style={styles.mainStatItem}>
-              <ThemedText style={styles.mainStatValue}>{averageScore.toFixed(1)}%</ThemedText>
-              <ThemedText style={styles.mainStatLabel}>Avg. Score</ThemedText>
-            </View>
-            <View style={styles.mainStatDivider} />
-            <View style={styles.mainStatItem}>
-              <ThemedText style={styles.mainStatValue}>{Math.floor(totalTimeSpent / 60)}h</ThemedText>
-              <ThemedText style={styles.mainStatLabel}>Total Time</ThemedText>
-            </View>
-          </View>
+        <Animated.View style={[{ opacity: fadeAnim, transform: [{ scale: scaleAnim }] }]}>
+          <LinearGradient
+            colors={['#667EEA', '#764BA2', '#5A67D8']}
+            start={{ x: 0, y: 0 }}
+            end={{ x: 1, y: 1 }}
+            style={styles.mainStatsCard}>
+            <View style={styles.mainStatsHeader}>
+              <ThemedText style={styles.mainStatsTitle}>Overall Performance</ThemedText>
 
-          {/* Achievement Badges */}
-          <View style={styles.achievementRow}>
-            {highestScore >= 90 && (
-              <InsightBadge type="success" text="Top Performer" />
-            )}
-            {averageScore >= 75 && (
-              <InsightBadge type="info" text="Above Average" />
-            )}
-            {filteredResults.length >= 10 && (
-              <InsightBadge type="warning" text="Consistent" />
-            )}
-          </View>
-        </LinearGradient>
+              <View style={styles.trendContainer}>
+                <IconSymbol name={trendIcon as any} size={16} color="#FFFFFF" />
+                <ThemedText style={styles.trendText}>
+                  {trend > 0 ? '+' : ''}
+                  {trend.toFixed(1)}% vs last period
+                </ThemedText>
+              </View>
+            </View>
 
-        {/* Metric Tabs */}
-        <View style={styles.metricTabs}>
-          {['score', 'time', 'accuracy'].map(metric => (
+            <View style={styles.mainStatsGrid}>
+              <View style={styles.mainStatItem}>
+                <ThemedText style={styles.mainStatValue}>{totalExams}</ThemedText>
+                <ThemedText style={styles.mainStatLabel}>Exams</ThemedText>
+              </View>
+
+              <View style={styles.mainStatDivider} />
+
+              <View style={styles.mainStatItem}>
+                <ThemedText style={styles.mainStatValue}>
+                  {averageScore.toFixed(1)}%
+                </ThemedText>
+                <ThemedText style={styles.mainStatLabel}>Avg. Score</ThemedText>
+              </View>
+
+              <View style={styles.mainStatDivider} />
+
+              <View style={styles.mainStatItem}>
+                <ThemedText style={styles.mainStatValue}>
+                  {Math.floor(totalTimeSpent / 60)}h
+                </ThemedText>
+                <ThemedText style={styles.mainStatLabel}>Total Time</ThemedText>
+              </View>
+            </View>
+
+            <View style={styles.achievementRow}>
+              {highestScore >= 90 && <InsightBadge type="success" text="🏆 Top Performer" />}
+              {averageScore >= 75 && <InsightBadge type="info" text="📈 Above Average" />}
+              {filteredResults.length >= 10 && <InsightBadge type="warning" text="⭐ Consistent" />}
+            </View>
+          </LinearGradient>
+        </Animated.View>
+
+        <Animated.View style={[styles.metricTabs, { opacity: fadeAnim }]}>
+          {(['score', 'time', 'accuracy'] as const).map((metric) => (
             <TouchableOpacity
               key={metric}
               style={[
                 styles.metricTab,
                 selectedMetric === metric && styles.metricTabActive,
-                { borderBottomColor: selectedMetric === metric ? ThemeColors.orange : 'transparent' }
+                {
+                  borderBottomColor:
+                    selectedMetric === metric ? ThemeColors.orange : 'transparent',
+                },
               ]}
-              onPress={() => setSelectedMetric(metric as any)}>
-              <ThemedText style={[
-                styles.metricTabText,
-                { color: selectedMetric === metric ? ThemeColors.orange : colors.text }
-              ]}>
-                {metric.charAt(0).toUpperCase() + metric.slice(1)}
+              onPress={() => handleMetricChange(metric)}>
+              <ThemedText
+                style={[
+                  styles.metricTabText,
+                  {
+                    color:
+                      selectedMetric === metric ? ThemeColors.orange : themeColors.text,
+                  },
+                ]}>
+                {metric === 'score'
+                  ? '📊 Score'
+                  : metric === 'time'
+                  ? '⏱️ Time'
+                  : '🎯 Accuracy'}
               </ThemedText>
             </TouchableOpacity>
           ))}
-        </View>
+        </Animated.View>
 
-        {/* Metrics Grid */}
         <View style={styles.metricsGrid}>
           <MetricCard
             icon="chart.bar.fill"
-            value={`${averageScore.toFixed(1)}%`}
-            label="Average Score"
+            value={
+              selectedMetric === 'score'
+                ? `${averageScore.toFixed(1)}%`
+                : selectedMetric === 'time'
+                ? `${Math.floor(totalTimeSpent / 60)}h ${totalTimeSpent % 60}m`
+                : `${averageAccuracy.toFixed(1)}%`
+            }
+            label={
+              selectedMetric === 'score'
+                ? 'Average Score'
+                : selectedMetric === 'time'
+                ? 'Total Time'
+                : 'Average Accuracy'
+            }
             change={trend}
             color={ThemeColors.orange}
+            index={0}
           />
+
           <MetricCard
             icon="star.fill"
             value={`${highestScore.toFixed(1)}%`}
             label="Highest Score"
             color="#4CAF50"
+            index={1}
           />
+
           <MetricCard
             icon="arrow.up.and.down"
             value={`${lowestScore.toFixed(1)}%`}
             label="Lowest Score"
             color="#F44336"
+            index={2}
           />
+
           <MetricCard
             icon="clock.fill"
-            value={Math.floor(totalTimeSpent / 60) + 'h'}
+            value={`${Math.floor(totalTimeSpent / 60)}h ${totalTimeSpent % 60}m`}
             label="Total Time"
             color="#764BA2"
+            index={3}
           />
         </View>
 
-        {/* Chart Section */}
         {filteredResults.length > 1 && (
-          <ThemedView style={[styles.chartCard, { backgroundColor: colors.card }]}>
-            <View style={styles.chartHeader}>
-              <View>
-                <ThemedText style={styles.chartTitle}>Performance Trend</ThemedText>
-                <ThemedText style={styles.chartSubtitle}>Last {Math.min(7, filteredResults.length)} exams</ThemedText>
+          <Animated.View
+            style={[{ opacity: fadeAnim, transform: [{ translateY: slideAnim }] }]}>
+            <ThemedView style={[styles.chartCard, { backgroundColor: themeColors.card }]}>
+              <View style={styles.chartHeader}>
+                <View>
+                  <ThemedText style={styles.chartTitle}>📈 Performance Trend</ThemedText>
+                  <ThemedText style={styles.chartSubtitle}>
+                    Last {Math.min(7, filteredResults.length)} exams
+                  </ThemedText>
+                </View>
+
+                <View style={styles.chartLegend}>
+                  <View
+                    style={[styles.legendDot, { backgroundColor: ThemeColors.orange }]}
+                  />
+                  <ThemedText style={styles.legendText}>Score %</ThemedText>
+                </View>
               </View>
-              <View style={styles.chartLegend}>
-                <View style={[styles.legendDot, { backgroundColor: ThemeColors.orange }]} />
-                <ThemedText style={styles.legendText}>Score %</ThemedText>
-              </View>
-            </View>
-            
-            <LineChart
-              data={{
-                labels: filteredResults.slice(-7).map((_, i) => `E${i + 1}`),
-                datasets: [{
-                  data: filteredResults.slice(-7).map(r => r.percentage),
+
+              <LineChart
+                data={{
+                  labels: filteredResults.slice(-7).map((_, i) => `Exam ${i + 1}`),
+                  datasets: [
+                    {
+                      data: filteredResults.slice(-7).map((r) => r.percentage),
+                      color: () => ThemeColors.orange,
+                      strokeWidth: 3,
+                    },
+                  ],
+                }}
+                width={screenWidth - 64}
+                height={220}
+                chartConfig={{
+                  backgroundColor: 'transparent',
+                  backgroundGradientFrom: 'transparent',
+                  backgroundGradientTo: 'transparent',
+                  decimalPlaces: 0,
                   color: () => ThemeColors.orange,
-                  strokeWidth: 3,
-                }]
-              }}
-              width={screenWidth - 64}
-              height={200}
-              chartConfig={{
-                backgroundColor: 'transparent',
-                backgroundGradientFrom: 'transparent',
-                backgroundGradientTo: 'transparent',
-                decimalPlaces: 0,
-                color: () => ThemeColors.orange,
-                labelColor: () => colors.text + '80',
-                propsForDots: {
-                  r: '6',
-                  strokeWidth: '2',
-                  stroke: ThemeColors.white,
-                },
-                propsForBackgroundLines: {
-                  stroke: colors.border + '30',
-                  strokeDasharray: '',
-                }
-              }}
-              bezier
-              style={styles.chart}
-              withInnerLines={true}
-              withOuterLines={false}
-              withVerticalLines={false}
-              withHorizontalLabels={true}
-              fromZero={true}
-              segments={4}
-            />
-          </ThemedView>
+                  labelColor: () => `${themeColors.text}80`,
+                  propsForDots: {
+                    r: '6',
+                    strokeWidth: '2',
+                    stroke: '#FFFFFF',
+                  },
+                  propsForBackgroundLines: {
+                    stroke: `${themeColors.border}30`,
+                    strokeDasharray: '',
+                  },
+                }}
+                bezier
+                style={styles.chart}
+                withInnerLines={true}
+                withOuterLines={false}
+                withVerticalLines={false}
+                withHorizontalLabels={true}
+                fromZero={true}
+                segments={4}
+                formatYLabel={(value) => `${value}%`}
+              />
+            </ThemedView>
+          </Animated.View>
         )}
 
-        {/* Exam History */}
-        <ThemedView style={[styles.historyCard, { backgroundColor: colors.card }]}>
-          <View style={styles.historyHeader}>
-            <View>
-              <ThemedText style={styles.historyTitle}>Exam History</ThemedText>
-              <ThemedText style={styles.historySubtitle}>
-                {filteredResults.length} completed • Last updated today
-              </ThemedText>
-            </View>
-            <TouchableOpacity style={styles.sortButton}>
-              <IconSymbol name="arrow.up.arrow.down" size={18} color={colors.icon} />
-            </TouchableOpacity>
-          </View>
-
-          {loading ? (
-            <ListSkeleton count={3} itemHeight={120} />
-          ) : filteredResults.length === 0 ? (
-            <View style={styles.emptyState}>
-              <View style={[styles.emptyIcon, { backgroundColor: colors.border + '20' }]}>
-                <IconSymbol name="doc.text.magnifyingglass" size={48} color={colors.icon} />
+        <Animated.View
+          style={[{ opacity: fadeAnim, transform: [{ translateY: slideAnim }] }]}>
+          <ThemedView style={[styles.historyCard, { backgroundColor: themeColors.card }]}>
+            <View style={styles.historyHeader}>
+              <View>
+                <ThemedText style={styles.historyTitle}>📚 Exam History</ThemedText>
+                <ThemedText style={styles.historySubtitle}>
+                  {filteredResults.length} completed • Last updated today
+                </ThemedText>
               </View>
-              <ThemedText style={styles.emptyTitle}>No data yet</ThemedText>
-              <ThemedText style={styles.emptyDescription}>
-                Complete your first exam to see analytics
-              </ThemedText>
-              <TouchableOpacity 
-                style={styles.emptyButton}
-                onPress={() => router.push('/explore')}>
-                <ThemedText style={styles.emptyButtonText}>Start Learning</ThemedText>
+
+              <TouchableOpacity
+                style={styles.sortButton}
+                onPress={() => Haptics.impactAsync(Haptics.ImpactFeedbackStyle.Light)}>
+                <IconSymbol name="arrow.up.arrow.down" size={18} color={themeColors.icon} />
               </TouchableOpacity>
             </View>
-          ) : (
-            filteredResults
-              .sort((a, b) => new Date(b.completedAt).getTime() - new Date(a.completedAt).getTime())
-              .map((result, index) => {
-                const scoreColor = result.percentage >= 80 ? '#4CAF50' : 
-                                  result.percentage >= 60 ? '#2196F3' :
-                                  result.percentage >= 40 ? '#FFA000' : '#F44336';
-                
-                return (
-                  <TouchableOpacity
-                    key={result.examId}
-                    style={[styles.historyItem, { borderLeftColor: scoreColor }]}
-                    activeOpacity={0.7}>
-                    
-                    <View style={styles.historyItemHeader}>
-                      <View style={styles.historyItemLeft}>
-                        <View style={[styles.historyItemIcon, { backgroundColor: scoreColor + '15' }]}>
-                          <IconSymbol name="doc.text.fill" size={20} color={scoreColor} />
-                        </View>
-                        <View style={styles.historyItemInfo}>
-                          <ThemedText style={styles.historyItemTitle} numberOfLines={1}>
-                            {result.examTitle}
-                          </ThemedText>
-                          <ThemedText style={styles.historyItemDate}>
-                            {new Date(result.completedAt).toLocaleDateString('en-US', {
-                              month: 'short',
-                              day: 'numeric',
-                              year: 'numeric'
-                            })}
-                          </ThemedText>
-                        </View>
-                      </View>
-                      <View style={[styles.historyItemScore, { backgroundColor: scoreColor + '15' }]}>
-                        <ThemedText style={[styles.historyItemScoreText, { color: scoreColor }]}>
-                          {result.percentage.toFixed(0)}%
-                        </ThemedText>
-                      </View>
-                    </View>
 
-                    <View style={styles.historyItemDetails}>
-                      <View style={styles.historyDetail}>
-                        <IconSymbol name="checkmark.circle" size={14} color={colors.icon} />
-                        <ThemedText style={styles.historyDetailText}>
-                          {result.correctAnswers}/{result.totalQuestions} correct
-                        </ThemedText>
-                      </View>
-                      <View style={styles.historyDetail}>
-                        <IconSymbol name="clock" size={14} color={colors.icon} />
-                        <ThemedText style={styles.historyDetailText}>
-                          {Math.floor(result.timeSpent / 60)} min
-                        </ThemedText>
-                      </View>
-                    </View>
+            {filteredResults.length === 0 ? (
+              <View style={styles.emptyState}>
+                <View
+                  style={[
+                    styles.emptyIcon,
+                    { backgroundColor: `${themeColors.border}20` },
+                  ]}>
+                  <IconSymbol
+                    name="doc.text.magnifyingglass"
+                    size={48}
+                    color={themeColors.icon}
+                  />
+                </View>
 
-                    <View style={styles.progressBar}>
-                      <View 
-                        style={[
-                          styles.progressFill, 
-                          { width: `${result.percentage}%`, backgroundColor: scoreColor }
-                        ]} 
-                      />
-                    </View>
-                  </TouchableOpacity>
-                );
-              })
-          )}
-        </ThemedView>
-      </ScrollView>
+                <ThemedText style={styles.emptyTitle}>No data yet</ThemedText>
+
+                <ThemedText style={styles.emptyDescription}>
+                  Complete your first exam to see analytics
+                </ThemedText>
+
+                <TouchableOpacity
+                  style={styles.emptyButton}
+                  onPress={() => router.push('/explore')}
+                  activeOpacity={0.8}>
+                  <LinearGradient
+                    colors={[ThemeColors.orange, ThemeColors.deepBlue]}
+                    style={styles.emptyButtonGradient}
+                    start={{ x: 0, y: 0 }}
+                    end={{ x: 1, y: 1 }}>
+                    <ThemedText style={styles.emptyButtonText}>
+                      Start Learning →
+                    </ThemedText>
+                  </LinearGradient>
+                </TouchableOpacity>
+              </View>
+            ) : (
+              filteredResults
+                .slice()
+                .sort(
+                  (a, b) =>
+                    new Date(b.completedAt).getTime() -
+                    new Date(a.completedAt).getTime()
+                )
+                .map((result: ReportExamResult, index: number) => {
+                  const scoreColor =
+                    result.percentage >= 80
+                      ? '#4CAF50'
+                      : result.percentage >= 60
+                      ? '#2196F3'
+                      : result.percentage >= 40
+                      ? '#FFA000'
+                      : '#F44336';
+
+                  const correctAnswers = result.correctAnswers ?? 0;
+                  const totalQuestions = result.totalQuestions ?? 0;
+                  const timeSpent = result.timeSpent ?? 0;
+
+                  return (
+                    <Animated.View
+                      key={`${result.examId}-${index}`}
+                      style={[
+                        styles.historyItemWrapper,
+                        {
+                          opacity: fadeAnim,
+                          transform: [{ translateX: slideAnim }],
+                        },
+                      ]}>
+                      <TouchableOpacity
+                        style={[styles.historyItem, { borderLeftColor: scoreColor }]}
+                        activeOpacity={0.7}
+                        onPress={() =>
+                          Haptics.impactAsync(Haptics.ImpactFeedbackStyle.Light)
+                        }>
+                        <View style={styles.historyItemHeader}>
+                          <View style={styles.historyItemLeft}>
+                            <View
+                              style={[
+                                styles.historyItemIcon,
+                                { backgroundColor: `${scoreColor}15` },
+                              ]}>
+                              <IconSymbol
+                                name="doc.text.fill"
+                                size={20}
+                                color={scoreColor}
+                              />
+                            </View>
+
+                            <View style={styles.historyItemInfo}>
+                              <ThemedText
+                                style={styles.historyItemTitle}
+                                numberOfLines={1}>
+                                {result.examTitle}
+                              </ThemedText>
+
+                              <ThemedText style={styles.historyItemDate}>
+                                {new Date(result.completedAt).toLocaleDateString('en-US', {
+                                  month: 'short',
+                                  day: 'numeric',
+                                  year: 'numeric',
+                                })}
+                              </ThemedText>
+                            </View>
+                          </View>
+
+                          <View
+                            style={[
+                              styles.historyItemScore,
+                              { backgroundColor: `${scoreColor}15` },
+                            ]}>
+                            <ThemedText
+                              style={[
+                                styles.historyItemScoreText,
+                                { color: scoreColor },
+                              ]}>
+                              {result.percentage.toFixed(0)}%
+                            </ThemedText>
+                          </View>
+                        </View>
+
+                        <View style={styles.historyItemDetails}>
+                          <View style={styles.historyDetail}>
+                            <IconSymbol
+                              name="checkmark.circle"
+                              size={14}
+                              color={themeColors.icon}
+                            />
+                            <ThemedText style={styles.historyDetailText}>
+                              {correctAnswers}/{totalQuestions} correct
+                            </ThemedText>
+                          </View>
+
+                          <View style={styles.historyDetail}>
+                            <IconSymbol name="clock" size={14} color={themeColors.icon} />
+                            <ThemedText style={styles.historyDetailText}>
+                              {Math.floor(timeSpent / 60)} min {timeSpent % 60} sec
+                            </ThemedText>
+                          </View>
+                        </View>
+
+                        <View style={styles.progressBar}>
+                          <View
+                            style={[
+                              styles.progressFill,
+                              {
+                                width: `${result.percentage}%`,
+                                backgroundColor: scoreColor,
+                              },
+                            ]}
+                          />
+                        </View>
+                      </TouchableOpacity>
+                    </Animated.View>
+                  );
+                })
+            )}
+          </ThemedView>
+        </Animated.View>
+      </Animated.ScrollView>
     </ThemedView>
   );
 }
@@ -465,25 +806,27 @@ const styles = StyleSheet.create({
     opacity: 0.6,
     marginBottom: 4,
     fontWeight: '500',
+    letterSpacing: 0.5,
   },
   title: {
-    fontSize: 28,
+    fontSize: 32,
     fontWeight: '800',
+    letterSpacing: -0.5,
   },
   profileButton: {
-    width: 48,
-    height: 48,
-    borderRadius: 16,
+    width: 52,
+    height: 52,
+    borderRadius: 18,
     overflow: 'hidden',
     ...Platform.select({
       ios: {
         shadowColor: '#000',
-        shadowOffset: { width: 0, height: 4 },
+        shadowOffset: { width: 0, height: 6 },
         shadowOpacity: 0.2,
-        shadowRadius: 8,
+        shadowRadius: 12,
       },
       android: {
-        elevation: 6,
+        elevation: 8,
       },
     }),
   },
@@ -494,24 +837,24 @@ const styles = StyleSheet.create({
   },
   periodContainer: {
     flexDirection: 'row',
-    gap: 10,
+    gap: 12,
     marginBottom: 24,
   },
   periodChip: {
     flex: 1,
-    paddingVertical: 10,
+    paddingVertical: 12,
     paddingHorizontal: 16,
-    borderRadius: 30,
+    borderRadius: 32,
     alignItems: 'center',
     ...Platform.select({
       ios: {
         shadowColor: '#000',
         shadowOffset: { width: 0, height: 2 },
-        shadowOpacity: 0.05,
-        shadowRadius: 4,
+        shadowOpacity: 0.08,
+        shadowRadius: 6,
       },
       android: {
-        elevation: 2,
+        elevation: 3,
       },
     }),
   },
@@ -519,32 +862,32 @@ const styles = StyleSheet.create({
     ...Platform.select({
       ios: {
         shadowColor: ThemeColors.orange,
-        shadowOffset: { width: 0, height: 4 },
+        shadowOffset: { width: 0, height: 6 },
         shadowOpacity: 0.3,
-        shadowRadius: 8,
+        shadowRadius: 12,
       },
       android: {
-        elevation: 4,
+        elevation: 6,
       },
     }),
   },
   periodChipText: {
-    fontSize: 14,
+    fontSize: 15,
     fontWeight: '600',
   },
   mainStatsCard: {
-    borderRadius: 24,
-    padding: 20,
+    borderRadius: 28,
+    padding: 24,
     marginBottom: 24,
     ...Platform.select({
       ios: {
         shadowColor: '#764BA2',
-        shadowOffset: { width: 0, height: 8 },
-        shadowOpacity: 0.3,
-        shadowRadius: 16,
+        shadowOffset: { width: 0, height: 12 },
+        shadowOpacity: 0.35,
+        shadowRadius: 20,
       },
       android: {
-        elevation: 8,
+        elevation: 12,
       },
     }),
   },
@@ -552,22 +895,23 @@ const styles = StyleSheet.create({
     flexDirection: 'row',
     justifyContent: 'space-between',
     alignItems: 'center',
-    marginBottom: 20,
+    marginBottom: 24,
   },
   mainStatsTitle: {
-    fontSize: 16,
+    fontSize: 17,
     fontWeight: '600',
     color: '#FFFFFF',
     opacity: 0.9,
+    letterSpacing: 0.5,
   },
   trendContainer: {
     flexDirection: 'row',
     alignItems: 'center',
     gap: 6,
     backgroundColor: 'rgba(255,255,255,0.2)',
-    paddingHorizontal: 10,
-    paddingVertical: 5,
-    borderRadius: 20,
+    paddingHorizontal: 12,
+    paddingVertical: 6,
+    borderRadius: 24,
   },
   trendText: {
     fontSize: 12,
@@ -578,40 +922,51 @@ const styles = StyleSheet.create({
     flexDirection: 'row',
     alignItems: 'center',
     justifyContent: 'space-around',
-    marginBottom: 16,
+    marginBottom: 20,
   },
   mainStatItem: {
     alignItems: 'center',
   },
   mainStatValue: {
-    fontSize: 32,
+    fontSize: 36,
     fontWeight: '800',
     color: '#FFFFFF',
-    marginBottom: 4,
+    marginBottom: 6,
   },
   mainStatLabel: {
     fontSize: 13,
     color: '#FFFFFF',
-    opacity: 0.8,
+    opacity: 0.85,
     fontWeight: '500',
   },
   mainStatDivider: {
     width: 1,
-    height: 40,
+    height: 48,
     backgroundColor: 'rgba(255,255,255,0.2)',
   },
   achievementRow: {
     flexDirection: 'row',
-    gap: 8,
-    marginTop: 8,
+    gap: 10,
+    marginTop: 12,
+    flexWrap: 'wrap',
   },
   insightBadge: {
     flexDirection: 'row',
     alignItems: 'center',
     gap: 6,
-    paddingHorizontal: 12,
-    paddingVertical: 6,
-    borderRadius: 20,
+    paddingHorizontal: 14,
+    paddingVertical: 8,
+    borderRadius: 24,
+    position: 'relative',
+    overflow: 'hidden',
+  },
+  insightGradient: {
+    position: 'absolute',
+    top: 0,
+    left: 0,
+    right: 0,
+    bottom: 0,
+    opacity: 0.1,
   },
   insightText: {
     fontSize: 12,
@@ -620,10 +975,10 @@ const styles = StyleSheet.create({
   metricTabs: {
     flexDirection: 'row',
     marginBottom: 20,
-    gap: 20,
+    gap: 24,
   },
   metricTab: {
-    paddingBottom: 8,
+    paddingBottom: 10,
     borderBottomWidth: 2,
   },
   metricTabActive: {
@@ -636,55 +991,64 @@ const styles = StyleSheet.create({
   metricsGrid: {
     flexDirection: 'row',
     flexWrap: 'wrap',
-    gap: 12,
+    gap: 14,
     marginBottom: 24,
   },
   metricCard: {
     flex: 1,
     minWidth: '45%',
-    padding: 16,
-    borderRadius: 20,
+    padding: 18,
+    borderRadius: 24,
+    position: 'relative',
+    overflow: 'hidden',
     ...Platform.select({
       ios: {
         shadowColor: '#000',
-        shadowOffset: { width: 0, height: 2 },
-        shadowOpacity: 0.05,
-        shadowRadius: 8,
+        shadowOffset: { width: 0, height: 4 },
+        shadowOpacity: 0.08,
+        shadowRadius: 12,
       },
       android: {
-        elevation: 3,
+        elevation: 4,
       },
     }),
+  },
+  metricGradient: {
+    position: 'absolute',
+    top: 0,
+    left: 0,
+    right: 0,
+    bottom: 0,
   },
   metricHeader: {
     flexDirection: 'row',
     justifyContent: 'space-between',
     alignItems: 'center',
-    marginBottom: 12,
+    marginBottom: 14,
   },
   metricIconContainer: {
-    width: 36,
-    height: 36,
-    borderRadius: 12,
+    width: 42,
+    height: 42,
+    borderRadius: 14,
     justifyContent: 'center',
     alignItems: 'center',
   },
   metricChange: {
     flexDirection: 'row',
     alignItems: 'center',
-    gap: 2,
-    paddingHorizontal: 6,
-    paddingVertical: 3,
-    borderRadius: 12,
+    gap: 3,
+    paddingHorizontal: 8,
+    paddingVertical: 4,
+    borderRadius: 14,
   },
   metricChangeText: {
     fontSize: 11,
     fontWeight: '700',
   },
   metricValue: {
-    fontSize: 24,
+    fontSize: 26,
     fontWeight: '800',
-    marginBottom: 4,
+    marginBottom: 6,
   },
   metricLabel: {
     fontSize: 13,
@@ -692,18 +1056,18 @@ const styles = StyleSheet.create({
     fontWeight: '500',
   },
   chartCard: {
-    padding: 16,
-    borderRadius: 24,
+    padding: 20,
+    borderRadius: 28,
     marginBottom: 24,
     ...Platform.select({
       ios: {
         shadowColor: '#000',
-        shadowOffset: { width: 0, height: 2 },
-        shadowOpacity: 0.05,
-        shadowRadius: 8,
+        shadowOffset: { width: 0, height: 4 },
+        shadowOpacity: 0.08,
+        shadowRadius: 12,
       },
       android: {
-        elevation: 3,
+        elevation: 4,
       },
     }),
   },
@@ -711,7 +1075,7 @@ const styles = StyleSheet.create({
     flexDirection: 'row',
     justifyContent: 'space-between',
     alignItems: 'center',
-    marginBottom: 16,
+    marginBottom: 20,
   },
   chartTitle: {
     fontSize: 18,
@@ -726,12 +1090,12 @@ const styles = StyleSheet.create({
   chartLegend: {
     flexDirection: 'row',
     alignItems: 'center',
-    gap: 6,
+    gap: 8,
   },
   legendDot: {
-    width: 8,
-    height: 8,
-    borderRadius: 4,
+    width: 10,
+    height: 10,
+    borderRadius: 5,
   },
   legendText: {
     fontSize: 12,
@@ -740,20 +1104,20 @@ const styles = StyleSheet.create({
   },
   chart: {
     marginVertical: 8,
-    borderRadius: 16,
+    borderRadius: 20,
   },
   historyCard: {
-    padding: 16,
-    borderRadius: 24,
+    padding: 20,
+    borderRadius: 28,
     ...Platform.select({
       ios: {
         shadowColor: '#000',
-        shadowOffset: { width: 0, height: 2 },
-        shadowOpacity: 0.05,
-        shadowRadius: 8,
+        shadowOffset: { width: 0, height: 4 },
+        shadowOpacity: 0.08,
+        shadowRadius: 12,
       },
       android: {
-        elevation: 3,
+        elevation: 4,
       },
     }),
   },
@@ -761,7 +1125,7 @@ const styles = StyleSheet.create({
     flexDirection: 'row',
     justifyContent: 'space-between',
     alignItems: 'center',
-    marginBottom: 20,
+    marginBottom: 24,
   },
   historyTitle: {
     fontSize: 18,
@@ -774,25 +1138,27 @@ const styles = StyleSheet.create({
     fontWeight: '500',
   },
   sortButton: {
-    width: 40,
-    height: 40,
-    borderRadius: 12,
+    width: 44,
+    height: 44,
+    borderRadius: 14,
     backgroundColor: ThemeColors.lightNeutral,
     justifyContent: 'center',
     alignItems: 'center',
   },
+  historyItemWrapper: {
+    marginBottom: 12,
+  },
   historyItem: {
     padding: 16,
-    borderRadius: 16,
-    marginBottom: 12,
+    borderRadius: 20,
     borderLeftWidth: 4,
     backgroundColor: ThemeColors.lightNeutral,
     ...Platform.select({
       ios: {
         shadowColor: '#000',
         shadowOffset: { width: 0, height: 2 },
-        shadowOpacity: 0.03,
-        shadowRadius: 4,
+        shadowOpacity: 0.04,
+        shadowRadius: 6,
       },
       android: {
         elevation: 2,
@@ -812,9 +1178,9 @@ const styles = StyleSheet.create({
     gap: 12,
   },
   historyItemIcon: {
-    width: 40,
-    height: 40,
-    borderRadius: 12,
+    width: 44,
+    height: 44,
+    borderRadius: 14,
     justifyContent: 'center',
     alignItems: 'center',
   },
@@ -832,19 +1198,20 @@ const styles = StyleSheet.create({
     fontWeight: '500',
   },
   historyItemScore: {
-    paddingHorizontal: 12,
+    paddingHorizontal: 14,
     paddingVertical: 6,
-    borderRadius: 12,
+    borderRadius: 14,
     marginLeft: 10,
   },
   historyItemScoreText: {
-    fontSize: 15,
+    fontSize: 16,
     fontWeight: '700',
   },
   historyItemDetails: {
     flexDirection: 'row',
-    gap: 16,
-    marginBottom: 12,
+    gap: 18,
+    marginBottom: 14,
+    flexWrap: 'wrap',
   },
   historyDetail: {
     flexDirection: 'row',
@@ -872,15 +1239,15 @@ const styles = StyleSheet.create({
     paddingVertical: 60,
   },
   emptyIcon: {
-    width: 100,
-    height: 100,
-    borderRadius: 30,
+    width: 120,
+    height: 120,
+    borderRadius: 36,
     justifyContent: 'center',
     alignItems: 'center',
-    marginBottom: 20,
+    marginBottom: 24,
   },
   emptyTitle: {
-    fontSize: 20,
+    fontSize: 22,
     fontWeight: '700',
     marginBottom: 8,
   },
@@ -888,29 +1255,55 @@ const styles = StyleSheet.create({
     fontSize: 14,
     opacity: 0.6,
     textAlign: 'center',
-    marginBottom: 24,
+    marginBottom: 28,
     fontWeight: '500',
+    paddingHorizontal: 32,
   },
   emptyButton: {
-    backgroundColor: ThemeColors.orange,
-    paddingHorizontal: 24,
-    paddingVertical: 12,
-    borderRadius: 30,
+    overflow: 'hidden',
+    borderRadius: 32,
     ...Platform.select({
       ios: {
         shadowColor: ThemeColors.orange,
-        shadowOffset: { width: 0, height: 4 },
+        shadowOffset: { width: 0, height: 6 },
         shadowOpacity: 0.3,
-        shadowRadius: 8,
+        shadowRadius: 12,
       },
       android: {
-        elevation: 4,
+        elevation: 6,
       },
     }),
+  },
+  emptyButtonGradient: {
+    paddingHorizontal: 28,
+    paddingVertical: 14,
+    borderRadius: 32,
   },
   emptyButtonText: {
     color: '#FFFFFF',
     fontSize: 16,
     fontWeight: '700',
+  },
+  loadingContainer: {
+    flex: 1,
+    justifyContent: 'center',
+    alignItems: 'center',
+    padding: 40,
+  },
+  loadingSpinner: {
+    width: 60,
+    height: 60,
+    borderRadius: 30,
+    marginBottom: 20,
+    overflow: 'hidden',
+  },
+  loadingGradient: {
+    flex: 1,
+    borderRadius: 30,
+  },
+  loadingText: {
+    fontSize: 14,
+    opacity: 0.6,
+    fontWeight: '500',
   },
 });

@@ -5,6 +5,9 @@ import { IconSymbol } from '@/components/ui/icon-symbol';
 import { Colors, ThemeColors } from '@/constants/theme';
 import { useColorScheme } from '@/hooks/use-color-scheme';
 import { getExams, saveExamResult } from '@/services/storage';
+import { getExamById } from '@/services/content';
+import { examResultService } from '@/services/exam-results';
+import { trackActivity } from '@/services/analyticsClient';
 import { Exam, ExamResult } from '@/types';
 import { LinearGradient } from 'expo-linear-gradient';
 import { useLocalSearchParams, useRouter } from 'expo-router';
@@ -94,8 +97,30 @@ export default function ExamTakeScreen() {
   }, [started, currentQuestionIndex, timeRemaining]);
 
   const loadExam = async () => {
-    const exams = await getExams();
-    const found = exams.find(e => e.id === params.examId);
+    const examId = typeof params.examId === 'string' ? params.examId : params.examId?.[0];
+    if (!examId) return;
+
+    let found: Exam | null = null;
+    try {
+      const remote = await getExamById(examId);
+      if (remote) {
+        const q = remote.questions?.map((q: any, i: number) => ({
+          ...q,
+          id: q.id || q._id || `q-${i}`,
+        }));
+        found = {
+          ...remote,
+          id: remote.id || remote._id || examId,
+          questions: q || [],
+        } as Exam;
+      }
+    } catch (e) {
+      console.warn('Exam load from API failed, trying local cache:', e);
+    }
+    if (!found) {
+      const exams = await getExams();
+      found = exams.find((e) => e.id === examId) || null;
+    }
     if (found) {
       setExam(found);
       setTimeRemaining(found.duration * 60);
@@ -158,7 +183,33 @@ export default function ExamTakeScreen() {
     };
 
     await saveExamResult(result);
-    
+
+    try {
+      const apiAnswers = exam.questions.map((q) => {
+        const selected = answers.get(q.id);
+        return {
+          questionId: q.id,
+          selectedAnswer: selected ?? -1,
+          isCorrect: selected === q.correctAnswer,
+        };
+      });
+      await examResultService.createResult({
+        examId: exam.id,
+        examTitle: exam.title,
+        score,
+        totalMarks,
+        answers: apiAnswers,
+      });
+    } catch (syncErr) {
+      console.warn('Could not sync exam result to server:', syncErr);
+    }
+
+    void trackActivity({
+      type: 'exam_complete',
+      contentId: exam.id,
+      score: result.percentage,
+    });
+
     Alert.alert(
       '🎉 Exam Completed!',
       `Your Score: ${score}/${totalMarks}\nPercentage: ${result.percentage.toFixed(1)}%\n\nGreat job!`,
